@@ -325,17 +325,21 @@ async function checkServerHealth() {
   dom.serverStatusEl.className = 'server-status checking';
   dom.statusLabel.textContent = 'Connecting...';
   try {
-    const res = await fetch(`${CONFIG.API_BASE_URL}/health`, { signal: AbortSignal.timeout(60000) });
+    const res = await fetch(`${CONFIG.API_BASE_URL}/status`, { signal: AbortSignal.timeout(60000) });
     if (res.ok) {
       dom.serverStatusEl.className = 'server-status online';
       dom.statusLabel.textContent = 'Server online';
     } else {
       throw new Error('Non-OK response');
     }
-  } catch {
+  } catch (err) {
     dom.serverStatusEl.className = 'server-status offline';
     dom.statusLabel.textContent = 'Server offline';
-    log('Cannot reach server at /health - ensure the server is running', 'error');
+    if (err.name === 'TimeoutError') {
+      log('Cannot reach server at /status (Timeout) - it might be waking up...', 'error');
+    } else {
+      log('Cannot reach server at /status - ensure the server is running', 'error');
+    }
   }
 }
 

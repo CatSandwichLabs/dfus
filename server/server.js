@@ -82,7 +82,7 @@ function createApp() {
   app.use('/api/download', downloadRoutes);
   app.use('/api/manage', express.json(), managementRoutes);
 
-  app.get('/health', (_req, res) => {
+  app.get('/status', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
