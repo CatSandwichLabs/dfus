@@ -95,13 +95,21 @@ async function mergeChunks(sessionId, password, folderMetadata, selfDestruct = f
 
   if (session.status === 'complete') {
     // If it's already merged, try to fetch the existing file record
-    const existingRecord = await FileRecord.findOne({ fileHash: session.fileHash }).lean();
-    return {
-      message: 'File already merged and verified',
-      finalPath: session.finalPath,
-      fileHash: session.fileHash,
-      shareId: existingRecord ? existingRecord.shareId : undefined,
-    };
+    const existingRecord = await FileRecord.findOne({ originalName: session.fileName, fileHash: session.fileHash });
+  
+    if (existingRecord) {
+      if (fs.existsSync(existingRecord.storagePath)) {
+        return {
+          message: 'File already merged and verified',
+          finalPath: existingRecord.storagePath,
+          fileHash: session.fileHash,
+          shareId: existingRecord.shareId,
+        };
+      } else {
+        // Orphaned record: MongoDB has it, but Render wiped the disk. Delete it and proceed with normal merge.
+        await FileRecord.deleteOne({ _id: existingRecord._id });
+      }
+    }
   }
 
   if (session.status === 'merging') {

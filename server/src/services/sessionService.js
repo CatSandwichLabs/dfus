@@ -34,6 +34,33 @@ async function getOrCreateSession({ fileHash, fileName, totalChunks, fileSizeByt
     };
   }
 
+  // If the session says it's complete, ensure the file actually still exists on disk! (Render ephemeral storage wipe check)
+  if (session.status === 'complete') {
+    const fs = require('fs');
+    const FileRecord = require('../models/FileRecord');
+    const existingRecord = await FileRecord.findOne({ fileHash: normalizedHash, originalName: fileName });
+    
+    if (!existingRecord || !fs.existsSync(existingRecord.storagePath)) {
+      // Orphaned session! Disk was wiped. Let's delete the corrupted records and start fresh.
+      if (existingRecord) await FileRecord.deleteOne({ _id: existingRecord._id }).catch(() => {});
+      await UploadSession.deleteOne({ _id: session._id }).catch(() => {});
+      await FileChunk.deleteMany({ uploadSessionId: session._id }).catch(() => {});
+      
+      // Create a fresh session
+      session = await UploadSession.create({
+        fileHash: normalizedHash,
+        fileName,
+        totalChunks,
+        fileSizeBytes,
+      });
+      return {
+        sessionId: session._id.toString(),
+        status: session.status,
+        uploadedChunks: [],
+      };
+    }
+  }
+
   const successChunks = await FileChunk.find(
     { uploadSessionId: session._id, status: 'success' },
     { chunkIndex: 1, _id: 0 }
