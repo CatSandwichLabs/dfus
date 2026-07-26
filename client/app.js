@@ -189,6 +189,12 @@ const dom = {
   dashboard:          document.querySelector('.analytics-panel'),
   dashboardTbody:     document.getElementById('analytics-table-body'),
   shareUrl:           document.getElementById('share-url'),
+  shareModal:         document.getElementById('share-modal'),
+  cloudUrl:           document.getElementById('cloud-url'),
+  cloudLinkContainer: document.getElementById('cloud-link-container'),
+  btnCopyLink:        document.getElementById('btn-copy-link'),
+  btnCopyCloud:       document.getElementById('btn-copy-cloud'),
+  btnCloseModal:      document.getElementById('btn-close-modal')
 };
 
 let speedChart = null;
