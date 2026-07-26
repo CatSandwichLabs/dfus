@@ -188,6 +188,7 @@ const dom = {
   folderInput:        document.getElementById('folder-input'),
   dashboard:          document.querySelector('.analytics-panel'),
   dashboardTbody:     document.getElementById('analytics-table-body'),
+  shareUrl:           document.getElementById('share-url'),
 };
 
 let speedChart = null;
