@@ -1,7 +1,7 @@
 'use strict';
 
 const express = require('express');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const FileRecord = require('../models/FileRecord');
 const { safeDelete } = require('../utils/pathUtils');
