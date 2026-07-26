@@ -274,6 +274,14 @@
                   <input type="password" id="upload-password" class="input-field" placeholder="Enter password (optional)" />
                 </div>
                 
+                <div class="inbox-target-container">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <label for="upload-target-inbox" class="info-label" style="margin-bottom: 0;">Send to Inbox (Optional)</label>
+                  </div>
+                  <input type="text" id="upload-target-inbox" class="input-field" placeholder="e.g. user@dfus.com" autocomplete="off" />
+                  <p id="inbox-status" style="font-size: 0.75rem; margin-top: 4px; display: none;"></p>
+                </div>
+                
                 <div class="self-destruct-container" style="display: flex; align-items: center; justify-content: space-between;">
                   <div>
                     <label for="upload-self-destruct" class="info-label" style="margin-bottom: 4px; color: #f87171;">Burn After Reading</label>

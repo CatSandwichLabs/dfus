@@ -182,6 +182,7 @@ const dom = {
   maxDownloads:       document.getElementById('upload-max-downloads'),
   expiration:         document.getElementById('upload-expiration'),
   webhook:            document.getElementById('upload-webhook'),
+  uploadTargetInbox:  document.getElementById('upload-target-inbox'),
   speedChartCanvas:   document.getElementById('speed-chart'),
   btnBrowseFolder:    document.getElementById('btn-browse-folder'),
   folderInput:        document.getElementById('folder-input'),
@@ -321,11 +322,11 @@ function setPhase(phase) {
 /* ----------------------------------------------------------------------------
    Server Health Check
    ---------------------------------------------------------------------------- */
-async function checkServerHealth() {
+async function checkServerHealth(retries = 5) {
   dom.serverStatusEl.className = 'server-status checking';
   dom.statusLabel.textContent = 'Connecting...';
   try {
-    const res = await fetch(`${CONFIG.API_BASE_URL}/status`, { signal: AbortSignal.timeout(60000) });
+    const res = await fetch(`${CONFIG.API_BASE_URL}/status`, { signal: AbortSignal.timeout(10000) });
     if (res.ok) {
       dom.serverStatusEl.className = 'server-status online';
       dom.statusLabel.textContent = 'Server online';
@@ -333,6 +334,12 @@ async function checkServerHealth() {
       throw new Error('Non-OK response');
     }
   } catch (err) {
+    if (retries > 0) {
+      log(`Server unreachable. Retrying in 3s... (${retries} attempts left)`, 'error');
+      setTimeout(() => checkServerHealth(retries - 1), 3000);
+      return;
+    }
+    
     dom.serverStatusEl.className = 'server-status offline';
     dom.statusLabel.textContent = 'Server offline';
     if (err.name === 'TimeoutError') {
@@ -1128,6 +1135,7 @@ async function triggerMerge() {
     let maxDownloads = dom.maxDownloads && dom.maxDownloads.value ? parseInt(dom.maxDownloads.value, 10) : 0;
     let expires = dom.expiration && dom.expiration.value !== 'never' ? dom.expiration.value : null;
     let webhookUrl = dom.webhook && dom.webhook.value ? dom.webhook.value : null;
+    let targetInboxId = dom.uploadTargetInbox && dom.uploadTargetInbox.value ? dom.uploadTargetInbox.value : null;
 
     const res = await fetch(`${CONFIG.API_BASE_URL}/api/upload/merge`, {
       method: 'POST',
@@ -1140,6 +1148,7 @@ async function triggerMerge() {
         maxDownloads,
         expires,
         webhookUrl,
+        targetInboxId,
         folderMetadata: state.folderMetadata || null
       })
     });
@@ -1668,6 +1677,36 @@ if (dom.geoblockSearch) {
   document.addEventListener('click', (e) => {
     if (!dom.geoblockSearch.contains(e.target) && !dom.geoblockAutocomplete.contains(e.target)) {
       dom.geoblockAutocomplete.classList.add('hidden');
+    }
+  });
+}
+
+if (dom.uploadTargetInbox) {
+  dom.uploadTargetInbox.addEventListener('blur', async (e) => {
+    const inboxId = e.target.value.trim();
+    const statusEl = document.getElementById('inbox-status');
+    if (!inboxId) {
+      statusEl.style.display = 'none';
+      return;
+    }
+    
+    try {
+      const res = await fetch(`${CONFIG.API_BASE_URL}/api/inbox/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inboxId })
+      });
+      if (res.ok) {
+        statusEl.textContent = '✓ Inbox verified';
+        statusEl.style.color = 'var(--success)';
+        statusEl.style.display = 'block';
+      } else {
+        statusEl.textContent = '✗ Inbox not found';
+        statusEl.style.color = 'var(--error)';
+        statusEl.style.display = 'block';
+      }
+    } catch (err) {
+      console.error(err);
     }
   });
 }

@@ -47,7 +47,8 @@ const fileRecordSchema = new mongoose.Schema({
   },
   geoblockCity: { type: String, default: '' },
   maxDownloads: { type: Number, default: 0 },
-  webhookUrl: { type: String, default: null }
+  webhookUrl: { type: String, default: null },
+  targetInboxId: { type: String, default: null }
 }, {
   timestamps: true,
 });

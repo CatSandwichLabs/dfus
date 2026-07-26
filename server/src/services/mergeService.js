@@ -79,7 +79,7 @@ async function uploadToGofile(filePath) {
  * @param {Array} [folderMetadata] - Array of { path, start, end } if uploading a folder
  * @returns {Promise<{ message: string, finalPath: string, fileHash: string, shareId?: string }>}
  */
-async function mergeChunks(sessionId, password, folderMetadata, selfDestruct = false, geoblockCity = '', maxDownloads = 0, expires = null, webhookUrl = null) {
+async function mergeChunks(sessionId, password, folderMetadata, selfDestruct = false, geoblockCity = '', maxDownloads = 0, expires = null, webhookUrl = null, targetInboxId = null) {
   if (!mongoose.isValidObjectId(sessionId)) {
     const err = new Error('Invalid sessionId');
     err.statusCode = 400;
@@ -278,7 +278,8 @@ async function mergeChunks(sessionId, password, folderMetadata, selfDestruct = f
       expiresAt,
       geoblockCity,
       maxDownloads: maxDownloads || 0,
-      webhookUrl
+      webhookUrl,
+      targetInboxId: targetInboxId ? targetInboxId.toLowerCase() : null
     });
     
     await fileRecord.save();

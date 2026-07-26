@@ -13,6 +13,7 @@ const pathUtils = require('./src/utils/pathUtils');
 const uploadRoutes = require('./src/routes/upload');
 const downloadRoutes = require('./src/routes/download');
 const managementRoutes = require('./src/routes/management');
+const inboxRoutes = require('./src/routes/inbox');
 const errorHandler = require('./src/middleware/errorHandler');
 
 validateForProduction();
@@ -81,6 +82,7 @@ function createApp() {
   app.use('/api/upload', uploadRoutes);
   app.use('/api/download', downloadRoutes);
   app.use('/api/manage', express.json(), managementRoutes);
+  app.use('/api/inbox', inboxRoutes);
 
   app.get('/status', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
