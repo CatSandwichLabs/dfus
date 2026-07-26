@@ -194,7 +194,8 @@ const dom = {
   cloudLinkContainer: document.getElementById('cloud-link-container'),
   btnCopyLink:        document.getElementById('btn-copy-link'),
   btnCopyCloud:       document.getElementById('btn-copy-cloud'),
-  btnCloseModal:      document.getElementById('btn-close-modal')
+  btnCloseModal:      document.getElementById('btn-close-modal'),
+  processingOptions:  document.getElementById('processing-options')
 };
 
 let speedChart = null;
@@ -592,6 +593,9 @@ async function handleFileSelected(file, folderMetadata = null) {
   dom.infoHash.textContent = 'Computing...';
   dom.dropZone.classList.add('has-file');
   dom.uploadControls.classList.remove('hidden');
+  if (dom.processingOptions) {
+    dom.processingOptions.classList.remove('hidden');
+  }
   dom.btnStart.disabled = true;
   dom.btnResume.disabled = true;
   dom.metricsPanel.classList.remove('hidden');
