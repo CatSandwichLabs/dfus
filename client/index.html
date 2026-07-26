@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="DFUS - Distributed Resumable File Upload System. Production-grade chunked uploads with SHA-256 integrity verification and parallel concurrency." />
+  <title>DFUS - Distributed File Upload System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+
+    <!-- ================================================================ -->
+    <!-- Header                                                           -->
+    <!-- ================================================================ -->
+    <header class="app-header" role="banner">
+      <div class="header-brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="32" height="32" rx="8" fill="#1a3a6e"/>
+            <path d="M16 6 L26 12 L26 20 L16 26 L6 20 L6 12 Z" stroke="#4f9cf9" stroke-width="1.5" fill="none"/>
+            <path d="M16 10 L22 13.5 L22 20.5 L16 24 L10 20.5 L10 13.5 Z" fill="#4f9cf9" fill-opacity="0.15"/>
+            <line x1="16" y1="6" x2="16" y2="26" stroke="#4f9cf9" stroke-width="1" stroke-opacity="0.5"/>
+            <circle cx="16" cy="16" r="3" fill="#4f9cf9"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1 class="brand-name">DFUS</h1>
+          <span class="brand-tagline">Distributed Resumable File Upload System</span>
+        </div>
+      </div>
+      <div class="header-meta">
+        <div id="server-status" class="server-status" role="status" aria-live="polite">
+          <span class="status-dot" id="status-dot"></span>
+          <span class="status-label" id="status-label">Connecting...</span>
+        </div>
+        <div class="header-config">
+          <span class="config-badge" title="Chunk size">5 MB chunks</span>
+          <span class="config-badge" title="Max parallel uploads">3x parallel</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- ================================================================ -->
+    <!-- Main Content                                                      -->
+    <!-- ================================================================ -->
+    <main class="main-content" role="main">
+
+      <!-- Drop Zone Panel -->
+      <section class="panel drop-panel" aria-labelledby="drop-panel-heading">
+        <h2 id="drop-panel-heading" class="panel-title">File Selection</h2>
+
+        <div id="drop-zone" class="drop-zone" role="button" tabindex="0"
+             aria-label="Drop a file here or click to browse"
+             aria-describedby="drop-zone-hint">
+          <div class="drop-zone-content">
+            <div class="drop-icon" aria-hidden="true">
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M24 8 L24 32" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+                <path d="M14 22 L24 32 L34 22" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M8 36 L8 40 L40 40 L40 36" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <p class="drop-primary">Drop file/folder here or <span class="drop-link" id="click-file">click to browse</span></p>
+            <p class="drop-secondary" id="drop-zone-hint">Tip: Select multiple files or drag a folder. Maximum efficiency, zero RAM limits.</p>
+            <div class="folder-upload-action" style="margin-top: 16px;">
+              <button id="btn-browse-folder" class="btn btn-secondary btn-small">Or upload a Folder</button>
+            </div>
+          </div>
+          <input type="file" id="file-input" class="visually-hidden" aria-hidden="true" tabindex="-1" multiple />
+          <input type="file" id="folder-input" class="visually-hidden" aria-hidden="true" tabindex="-1" webkitdirectory directory />
+        </div>
+
+        <!-- File Info (shown after selection) -->
+        <div id="file-info" class="file-info hidden" role="region" aria-label="Selected file information">
+          <div class="file-info-grid">
+            <div class="info-item">
+              <span class="info-label">File name</span>
+              <span class="info-value mono" id="info-filename">-</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Size</span>
+              <span class="info-value mono" id="info-filesize">-</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">Total chunks</span>
+              <span class="info-value mono" id="info-chunks">-</span>
+            </div>
+            <div class="info-item">
+              <span class="info-label">SHA-256</span>
+              <span class="info-value mono hash-value" id="info-hash">Computing...</span>
+            </div>
+          </div>
+
+          <!-- Hash computation progress -->
+          <div id="hash-progress-container" class="progress-container" role="progressbar" aria-label="SHA-256 computation progress">
+            <div class="progress-label">
+              <span>Computing SHA-256</span>
+              <span id="hash-progress-pct" class="mono">0%</span>
+            </div>
+            <div class="progress-track">
+              <div id="hash-progress-bar" class="progress-fill progress-fill-hash"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Upload Controls -->
+        <div id="upload-controls" class="upload-controls hidden">
+          <div class="password-protect-container" style="margin-bottom: 16px;">
+            <label for="upload-password" class="info-label">Optional: Protect with password</label>
+            <input type="password" id="upload-password" class="input-field" placeholder="Enter password (optional)" />
+          </div>
+          <button id="btn-start" class="btn btn-primary" disabled>
+            <span class="btn-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M3 2.5l10 5.5-10 5.5V2.5z"/>
+              </svg>
+            </span>
+            Start Upload
+          </button>
+          <button id="btn-resume" class="btn btn-secondary" disabled>
+            <span class="btn-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M2 2h3v12H2V2zm9 0l5 6-5 6V2z"/>
+              </svg>
+            </span>
+            Resume Upload
+          </button>
+          <button id="btn-pause" class="btn btn-ghost hidden">
+            <span class="btn-icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M2 2h4v12H2V2zm8 0h4v12h-4V2z"/>
+              </svg>
+            </span>
+            Pause
+          </button>
+          <button id="btn-reset" class="btn btn-danger-ghost hidden">
+            Reset
+          </button>
+        </div>
+      </section>
+
+      <!-- Metrics Panel -->
+      <section id="metrics-panel" class="panel metrics-panel hidden" aria-label="Upload metrics">
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="metric-label">Progress</div>
+            <div class="metric-value mono" id="metric-progress">0%</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Speed</div>
+            <div class="metric-value mono" id="metric-speed">- MB/s</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Uploaded</div>
+            <div class="metric-value mono" id="metric-uploaded">0 / 0</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Status</div>
+            <div class="metric-value" id="metric-status">
+              <span class="status-badge" id="status-badge">IDLE</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Overall Upload Progress Bar -->
+        <div class="progress-container overall-progress" role="progressbar"
+             aria-label="Overall upload progress" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"
+             id="overall-progress-bar-container">
+          <div class="progress-track">
+            <div id="overall-progress-bar" class="progress-fill progress-fill-primary"></div>
+          </div>
+        </div>
+
+        <!-- Network Telemetry Graph -->
+        <div class="telemetry-panel" style="margin-top: 24px;">
+          <h3 class="panel-title" style="font-size: 14px; margin-bottom: 8px;">Network Telemetry (MB/s)</h3>
+          <div style="height: 120px; width: 100%; position: relative;">
+            <canvas id="speed-chart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- Active Session File Management -->
+      <section id="session-dashboard" class="panel hidden" aria-labelledby="dashboard-heading">
+        <h2 id="dashboard-heading" class="panel-title">My Recent Uploads</h2>
+        <div class="table-responsive" style="margin-top: 16px;">
+          <table style="width: 100%; text-align: left; border-collapse: collapse;">
+            <thead>
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                <th style="padding: 8px;">File Name</th>
+                <th style="padding: 8px;">Size</th>
+                <th style="padding: 8px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="dashboard-tbody">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Packet Matrix Section -->
+      <section id="matrix-section" class="panel matrix-panel hidden" aria-labelledby="matrix-heading">
+        <div class="matrix-header">
+          <h2 id="matrix-heading" class="panel-title">Packet Matrix</h2>
+          <div class="matrix-legend" role="list" aria-label="Packet state legend">
+            <div class="legend-item" role="listitem">
+              <span class="legend-swatch swatch-pending" aria-hidden="true"></span>
+              <span>Pending</span>
+            </div>
+            <div class="legend-item" role="listitem">
+              <span class="legend-swatch swatch-uploading" aria-hidden="true"></span>
+              <span>Uploading</span>
+            </div>
+            <div class="legend-item" role="listitem">
+              <span class="legend-swatch swatch-success" aria-hidden="true"></span>
+              <span>Success</span>
+            </div>
+            <div class="legend-item" role="listitem">
+              <span class="legend-swatch swatch-failed" aria-hidden="true"></span>
+              <span>Failed</span>
+            </div>
+          </div>
+        </div>
+        <div id="packet-matrix" class="packet-matrix" role="grid" aria-label="File chunk upload status grid"></div>
+        <div class="matrix-footer">
+          <span class="mono small" id="matrix-summary">0 pending / 0 uploading / 0 success / 0 failed</span>
+        </div>
+      </section>
+
+      <!-- Activity Log -->
+      <section class="panel log-panel" aria-labelledby="log-heading">
+        <div class="log-header">
+          <h2 id="log-heading" class="panel-title">Activity Log</h2>
+          <button id="btn-clear-log" class="btn-text" aria-label="Clear activity log">Clear</button>
+        </div>
+        <div id="activity-log" class="activity-log" role="log" aria-live="polite" aria-relevant="additions"></div>
+      </section>
+
+    </main>
+    
+    <!-- Share Modal -->
+    <div id="share-modal" class="modal hidden">
+      <div class="modal-content">
+        <h2 class="panel-title" style="color: #4ade80;">Upload Complete!</h2>
+        <p class="drop-secondary" style="margin-bottom: 16px;">Your file has been securely merged and stored.</p>
+        <div class="share-link-container">
+          <span class="info-label">Local P2P Download Link:</span>
+          <div style="display: flex; gap: 8px; margin-top: 8px;">
+            <input type="text" id="share-url" class="input-field mono" readonly style="flex: 1; padding: 8px;" />
+            <button id="btn-copy-link" class="btn btn-secondary">Copy</button>
+          </div>
+        </div>
+        <div class="share-link-container" id="cloud-link-container" style="margin-top: 16px; display: none;">
+          <span class="info-label">Gofile.io Cloud Link (Permanent):</span>
+          <div style="display: flex; gap: 8px; margin-top: 8px;">
+            <input type="text" id="cloud-url" class="input-field mono" readonly style="flex: 1; padding: 8px;" />
+            <button id="btn-copy-cloud" class="btn btn-secondary">Copy</button>
+          </div>
+        </div>
+        <div style="margin-top: 24px; text-align: right;">
+          <button id="btn-close-modal" class="btn btn-primary">Done</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

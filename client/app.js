@@ -1,0 +1,1254 @@
+'use strict';
+
+/* ============================================================================
+   DFUS - Client Application
+   Handles file selection, incremental SHA-256, chunked upload with concurrency
+   control, retry logic, resumability, and the Packet Matrix UI.
+   ============================================================================ */
+
+/* ----------------------------------------------------------------------------
+   Incremental SHA-256
+   A pure-JavaScript, streaming SHA-256 implementation that accepts data in
+   chunks via update() and finalizes with digest(). This avoids loading the
+   entire file into memory for hash computation.
+   ---------------------------------------------------------------------------- */
+class IncrementalSHA256 {
+  constructor() {
+    this._K = new Uint32Array([
+      0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
+      0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+      0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
+      0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+      0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc,
+      0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+      0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7,
+      0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+      0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13,
+      0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+      0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3,
+      0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+      0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5,
+      0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+      0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208,
+      0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
+    ]);
+    this._H = new Uint32Array([
+      0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+      0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19,
+    ]);
+    this._buf = new Uint8Array(64);
+    this._bufLen = 0;
+    this._totalLen = 0;
+  }
+
+  update(data) {
+    const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
+    let i = 0;
+    while (i < bytes.length) {
+      const space = 64 - this._bufLen;
+      const take = Math.min(space, bytes.length - i);
+      this._buf.set(bytes.subarray(i, i + take), this._bufLen);
+      this._bufLen += take;
+      i += take;
+      if (this._bufLen === 64) {
+        this._processBlock(this._buf);
+        this._bufLen = 0;
+      }
+    }
+    this._totalLen += bytes.length;
+    return this;
+  }
+
+  digest() {
+    const totalBits = this._totalLen * 8;
+    const padBuf = new Uint8Array(this._bufLen <= 55 ? 64 : 128);
+    padBuf.set(this._buf.subarray(0, this._bufLen));
+    padBuf[this._bufLen] = 0x80;
+    const view = new DataView(padBuf.buffer);
+    const hiWord = Math.floor(totalBits / 0x100000000);
+    const loWord = totalBits >>> 0;
+    view.setUint32(padBuf.length - 8, hiWord, false);
+    view.setUint32(padBuf.length - 4, loWord, false);
+    for (let offset = 0; offset < padBuf.length; offset += 64) {
+      this._processBlock(padBuf.subarray(offset, offset + 64));
+    }
+    const out = new Uint8Array(32);
+    const outView = new DataView(out.buffer);
+    for (let j = 0; j < 8; j++) outView.setUint32(j * 4, this._H[j], false);
+    return Array.from(out).map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  _processBlock(block) {
+    const W = new Uint32Array(64);
+    const dv = new DataView(block.buffer, block.byteOffset, block.byteLength);
+    for (let i = 0; i < 16; i++) W[i] = dv.getUint32(i * 4, false);
+    for (let i = 16; i < 64; i++) {
+      const s0 = this._rotr(W[i - 15], 7) ^ this._rotr(W[i - 15], 18) ^ (W[i - 15] >>> 3);
+      const s1 = this._rotr(W[i - 2], 17) ^ this._rotr(W[i - 2], 19) ^ (W[i - 2] >>> 10);
+      W[i] = (W[i - 16] + s0 + W[i - 7] + s1) >>> 0;
+    }
+    let [a, b, c, d, e, f, g, h] = this._H;
+    for (let i = 0; i < 64; i++) {
+      const S1 = this._rotr(e, 6) ^ this._rotr(e, 11) ^ this._rotr(e, 25);
+      const ch = (e & f) ^ (~e & g);
+      const temp1 = (h + S1 + ch + this._K[i] + W[i]) >>> 0;
+      const S0 = this._rotr(a, 2) ^ this._rotr(a, 13) ^ this._rotr(a, 22);
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const temp2 = (S0 + maj) >>> 0;
+      h = g; g = f; f = e;
+      e = (d + temp1) >>> 0;
+      d = c; c = b; b = a;
+      a = (temp1 + temp2) >>> 0;
+    }
+    this._H[0] = (this._H[0] + a) >>> 0;
+    this._H[1] = (this._H[1] + b) >>> 0;
+    this._H[2] = (this._H[2] + c) >>> 0;
+    this._H[3] = (this._H[3] + d) >>> 0;
+    this._H[4] = (this._H[4] + e) >>> 0;
+    this._H[5] = (this._H[5] + f) >>> 0;
+    this._H[6] = (this._H[6] + g) >>> 0;
+    this._H[7] = (this._H[7] + h) >>> 0;
+  }
+
+  _rotr(v, n) {
+    return ((v >>> n) | (v << (32 - n))) >>> 0;
+  }
+}
+
+/* ----------------------------------------------------------------------------
+   Utility: SHA-256 of an ArrayBuffer (for individual chunks - 5 MB max)
+   ---------------------------------------------------------------------------- */
+async function computeChunkSHA256(arrayBuffer) {
+  const hashBuf = await crypto.subtle.digest('SHA-256', arrayBuffer);
+  return Array.from(new Uint8Array(hashBuf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/* ----------------------------------------------------------------------------
+   Utility: format bytes
+   ---------------------------------------------------------------------------- */
+function formatBytes(bytes) {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${(bytes / Math.pow(k, i)).toFixed(i > 1 ? 2 : 0)} ${sizes[i]}`;
+}
+
+function formatSpeed(bytesPerSec) {
+  if (bytesPerSec <= 0 || !isFinite(bytesPerSec)) return '-- MB/s';
+  return `${(bytesPerSec / (1024 * 1024)).toFixed(2)} MB/s`;
+}
+
+/* ----------------------------------------------------------------------------
+   DOM References
+   ---------------------------------------------------------------------------- */
+const dom = {
+  dropZone:           document.getElementById('drop-zone'),
+  fileInput:          document.getElementById('file-input'),
+  fileInfo:           document.getElementById('file-info'),
+  infoFilename:       document.getElementById('info-filename'),
+  infoFilesize:       document.getElementById('info-filesize'),
+  infoChunks:         document.getElementById('info-chunks'),
+  infoHash:           document.getElementById('info-hash'),
+  hashProgressContainer: document.getElementById('hash-progress-container'),
+  hashProgressBar:    document.getElementById('hash-progress-bar'),
+  hashProgressPct:    document.getElementById('hash-progress-pct'),
+  uploadControls:     document.getElementById('upload-controls'),
+  btnStart:           document.getElementById('btn-start'),
+  btnResume:          document.getElementById('btn-resume'),
+  btnPause:           document.getElementById('btn-pause'),
+  btnReset:           document.getElementById('btn-reset'),
+  metricsPanel:       document.getElementById('metrics-panel'),
+  metricProgress:     document.getElementById('metric-progress'),
+  metricSpeed:        document.getElementById('metric-speed'),
+  metricUploaded:     document.getElementById('metric-uploaded'),
+  statusBadge:        document.getElementById('status-badge'),
+  overallProgressBar: document.getElementById('overall-progress-bar'),
+  overallProgressBarContainer: document.getElementById('overall-progress-bar-container'),
+  matrixSection:      document.getElementById('matrix-section'),
+  packetMatrix:       document.getElementById('packet-matrix'),
+  matrixSummary:      document.getElementById('matrix-summary'),
+  activityLog:        document.getElementById('activity-log'),
+  btnClearLog:        document.getElementById('btn-clear-log'),
+  serverStatusEl:     document.getElementById('server-status'),
+  statusLabel:        document.getElementById('status-label'),
+  uploadPassword:     document.getElementById('upload-password'),
+  speedChartCanvas:   document.getElementById('speed-chart'),
+  shareModal:         document.getElementById('share-modal'),
+  shareUrl:           document.getElementById('share-url'),
+  btnCopyLink:        document.getElementById('btn-copy-link'),
+  cloudUrl:           document.getElementById('cloud-url'),
+  btnCopyCloud:       document.getElementById('btn-copy-cloud'),
+  cloudLinkContainer: document.getElementById('cloud-link-container'),
+  btnCloseModal:      document.getElementById('btn-close-modal'),
+  btnBrowseFolder:    document.getElementById('btn-browse-folder'),
+  folderInput:        document.getElementById('folder-input'),
+  dashboard:          document.getElementById('session-dashboard'),
+  dashboardTbody:     document.getElementById('dashboard-tbody'),
+};
+
+let speedChart = null;
+function initSpeedChart() {
+  if (speedChart) return;
+  const ctx = dom.speedChartCanvas.getContext('2d');
+  speedChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: [],
+      datasets: [{
+        label: 'Speed (MB/s)',
+        data: [],
+        borderColor: '#4f9cf9',
+        backgroundColor: 'rgba(79, 156, 249, 0.2)',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      scales: {
+        x: { display: false },
+        y: { 
+          beginAtZero: true,
+          grid: { color: 'rgba(255, 255, 255, 0.05)' },
+          ticks: { 
+            color: '#94a3b8', 
+            font: { family: 'JetBrains Mono' },
+            callback: function(value) {
+              if (value > 0 && value < 1) {
+                return (value * 1024).toFixed(0) + ' KB/s';
+              }
+              return value.toFixed(1) + ' MB/s';
+            }
+          }
+        }
+      },
+      plugins: {
+        legend: { display: false }
+      }
+    }
+  });
+}
+
+/* ----------------------------------------------------------------------------
+   Application State
+   ---------------------------------------------------------------------------- */
+const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB
+const CONCURRENCY_LIMIT = 3;
+const MAX_RETRIES = 3;
+const RETRY_BASE_DELAY_MS = 1000;
+
+const state = {
+  phase: 'idle',           // idle | hashing | ready | uploading | paused | merging | complete | error
+  file: null,
+  fileHash: null,
+  sessionId: null,
+  totalChunks: 0,
+  chunks: [],              // Array<{ index, status: 'pending'|'uploading'|'success'|'failed', retries }>
+  uploadedBytes: 0,
+  startTime: null,
+  speedSamples: [],        // ring buffer of { time, bytes } for rolling speed
+  activeUploads: 0,
+  pendingQueue: [],        // chunk indices pending dispatch
+  isPaused: false,
+  folderMetadata: null,
+};
+
+/* ----------------------------------------------------------------------------
+   Activity Log
+   ---------------------------------------------------------------------------- */
+function log(message, level = 'info') {
+  const now = new Date();
+  const time = now.toTimeString().slice(0, 8);
+
+  const entry = document.createElement('div');
+  entry.className = 'log-entry';
+
+  const timeEl = document.createElement('span');
+  timeEl.className = 'log-time';
+  timeEl.textContent = time;
+
+  const levelEl = document.createElement('span');
+  levelEl.className = `log-level log-level-${level}`;
+  levelEl.textContent = level.toUpperCase();
+
+  const msgEl = document.createElement('span');
+  msgEl.className = 'log-message';
+  msgEl.textContent = message;
+
+  entry.append(timeEl, levelEl, msgEl);
+
+  // Remove empty state message if present
+  const empty = dom.activityLog.querySelector('.log-empty');
+  if (empty) empty.remove();
+
+  dom.activityLog.prepend(entry);
+
+  // Keep at most 200 log lines
+  const entries = dom.activityLog.querySelectorAll('.log-entry');
+  if (entries.length > 200) {
+    entries[entries.length - 1].remove();
+  }
+}
+
+function showLogEmpty() {
+  if (!dom.activityLog.querySelector('.log-entry')) {
+    const el = document.createElement('p');
+    el.className = 'log-empty';
+    el.textContent = 'No activity yet.';
+    dom.activityLog.appendChild(el);
+  }
+}
+
+/* ----------------------------------------------------------------------------
+   Status Badge
+   ---------------------------------------------------------------------------- */
+const BADGE_CLASSES = ['idle','hashing','ready','uploading','paused','merging','complete','error'];
+
+function setPhase(phase) {
+  state.phase = phase;
+  dom.statusBadge.className = 'status-badge';
+  dom.statusBadge.classList.add(`badge-${phase}`);
+  dom.statusBadge.textContent = phase.toUpperCase();
+}
+
+/* ----------------------------------------------------------------------------
+   Server Health Check
+   ---------------------------------------------------------------------------- */
+async function checkServerHealth() {
+  dom.serverStatusEl.className = 'server-status checking';
+  dom.statusLabel.textContent = 'Connecting...';
+  try {
+    const res = await fetch(`${CONFIG.API_BASE_URL}/health`, { signal: AbortSignal.timeout(4000) });
+    if (res.ok) {
+      dom.serverStatusEl.className = 'server-status online';
+      dom.statusLabel.textContent = 'Server online';
+    } else {
+      throw new Error('Non-OK response');
+    }
+  } catch {
+    dom.serverStatusEl.className = 'server-status offline';
+    dom.statusLabel.textContent = 'Server offline';
+    log('Cannot reach server at /health - ensure the server is running', 'error');
+  }
+}
+
+/* ----------------------------------------------------------------------------
+   Packet Matrix Rendering
+   ---------------------------------------------------------------------------- */
+function buildMatrix(totalChunks) {
+  dom.packetMatrix.innerHTML = '';
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < totalChunks; i++) {
+    const el = document.createElement('div');
+    el.className = 'packet pending';
+    el.id = `pkt-${i}`;
+    el.setAttribute('role', 'gridcell');
+    el.setAttribute('aria-label', `Chunk ${i}: pending`);
+    el.title = `Chunk ${i}`;
+    frag.appendChild(el);
+  }
+  dom.packetMatrix.appendChild(frag);
+  dom.matrixSection.classList.remove('hidden');
+  updateMatrixSummary();
+}
+
+function setPacketState(index, status) {
+  state.chunks[index].status = status;
+  const el = document.getElementById(`pkt-${index}`);
+  if (!el) return;
+  el.className = `packet ${status}`;
+  el.setAttribute('aria-label', `Chunk ${index}: ${status}`);
+  el.title = `Chunk ${index} - ${status}`;
+}
+
+function updateMatrixSummary() {
+  const counts = { pending: 0, uploading: 0, success: 0, failed: 0 };
+  for (const c of state.chunks) counts[c.status]++;
+  dom.matrixSummary.textContent =
+    `${counts.pending} pending / ${counts.uploading} uploading / ${counts.success} success / ${counts.failed} failed`;
+}
+
+/* ----------------------------------------------------------------------------
+   Metrics Update
+   ---------------------------------------------------------------------------- */
+function updateMetrics() {
+  const successCount = state.chunks.filter((c) => c.status === 'success').length;
+  const pct = state.totalChunks > 0 ? Math.round((successCount / state.totalChunks) * 100) : 0;
+  dom.metricProgress.textContent = `${pct}%`;
+  dom.metricUploaded.textContent = `${successCount} / ${state.totalChunks}`;
+  dom.overallProgressBar.style.width = `${pct}%`;
+  dom.overallProgressBarContainer.setAttribute('aria-valuenow', pct);
+
+  // Rolling speed: average over last 5 seconds of samples
+  const now = Date.now();
+  state.speedSamples = state.speedSamples.filter((s) => now - s.time < 5000);
+  let currentSpeedMBps = 0;
+  if (state.speedSamples.length >= 2) {
+    const oldest = state.speedSamples[0];
+    const newest = state.speedSamples[state.speedSamples.length - 1];
+    const elapsed = (newest.time - oldest.time) / 1000;
+    const bytesDelta = newest.bytes - oldest.bytes;
+    if (elapsed > 0) {
+      currentSpeedMBps = bytesDelta / elapsed / (1024 * 1024);
+      dom.metricSpeed.textContent = formatSpeed(bytesDelta / elapsed);
+    }
+  }
+
+  if (speedChart) {
+    const timeLabel = new Date().toLocaleTimeString();
+    speedChart.data.labels.push(timeLabel);
+    speedChart.data.datasets[0].data.push(currentSpeedMBps);
+    if (speedChart.data.labels.length > 20) {
+      speedChart.data.labels.shift();
+      speedChart.data.datasets[0].data.shift();
+    }
+    
+    // Efficiency Colors
+    let color = '#ef4444'; // Red < 1 MB/s
+    let bgColor = 'rgba(239, 68, 68, 0.2)';
+    if (currentSpeedMBps >= 5) {
+      color = '#22c55e'; // Green >= 5 MB/s
+      bgColor = 'rgba(34, 197, 94, 0.2)';
+    } else if (currentSpeedMBps >= 1) {
+      color = '#eab308'; // Yellow >= 1 MB/s
+      bgColor = 'rgba(234, 179, 8, 0.2)';
+    }
+    speedChart.data.datasets[0].borderColor = color;
+    speedChart.data.datasets[0].backgroundColor = bgColor;
+    
+    speedChart.update();
+  }
+
+  updateMatrixSummary();
+}
+
+/* ----------------------------------------------------------------------------
+   File SHA-256 Computation (incremental, 16 MB slices)
+   ---------------------------------------------------------------------------- */
+async function computeFileSHA256(file) {
+  const SLICE_SIZE = 16 * 1024 * 1024; // 16 MB per slice
+  const sha = new IncrementalSHA256();
+  let offset = 0;
+
+  dom.hashProgressContainer.classList.remove('hidden');
+  dom.infoHash.textContent = 'Computing...';
+
+  while (offset < file.size) {
+    const slice = file.slice(offset, offset + SLICE_SIZE);
+    const buffer = await slice.arrayBuffer();
+    sha.update(new Uint8Array(buffer));
+    offset += SLICE_SIZE;
+
+    const pct = Math.min(100, Math.round((offset / file.size) * 100));
+    dom.hashProgressBar.style.width = `${pct}%`;
+    dom.hashProgressPct.textContent = `${pct}%`;
+
+    // Yield to the event loop to avoid freezing the UI on large files
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
+  dom.hashProgressBar.style.width = '100%';
+  dom.hashProgressPct.textContent = '100%';
+
+  return sha.digest();
+}
+
+/* ----------------------------------------------------------------------------
+   Multi-File / Folder Selection Handler
+   ---------------------------------------------------------------------------- */
+function handleMultiFileSelected(files, fallbackName = 'archive') {
+  if (!files || files.length === 0) return;
+  if (state.phase === 'uploading' || state.phase === 'merging') {
+    log('Cannot change file while an upload is in progress', 'warn');
+    return;
+  }
+
+  const fileArray = Array.from(files);
+  
+  if (fileArray.length === 1) {
+    return handleFileSelected(fileArray[0]);
+  }
+
+  const blobParts = [];
+  const folderMetadata = [];
+  let offset = 0;
+
+  for (const f of fileArray) {
+    blobParts.push(f);
+    const path = f.webkitRelativePath || f.name;
+    folderMetadata.push({
+      path: path,
+      size: f.size,
+      start: offset,
+      end: offset + f.size
+    });
+    offset += f.size;
+  }
+
+  const firstPath = fileArray[0].webkitRelativePath;
+  const folderName = (firstPath ? firstPath.split('/')[0] : fallbackName) || fallbackName;
+  const virtualFile = new Blob(blobParts);
+  virtualFile.name = `${folderName}.zip`;
+
+  // Use the standard file flow, but inject the metadata
+  handleFileSelected(virtualFile, folderMetadata);
+}
+
+/* ----------------------------------------------------------------------------
+   File Selection Handler
+   ---------------------------------------------------------------------------- */
+async function handleFileSelected(file, folderMetadata = null) {
+  if (!file) return;
+  if (state.phase === 'uploading' || state.phase === 'merging') {
+    log('Cannot change file while an upload is in progress', 'warn');
+    return;
+  }
+
+  // Reset state
+  Object.assign(state, {
+    phase: 'idle',
+    file,
+    fileHash: null,
+    sessionId: null,
+    totalChunks: Math.ceil(file.size / CHUNK_SIZE),
+    chunks: [],
+    uploadedBytes: 0,
+    startTime: null,
+    speedSamples: [],
+    activeUploads: 0,
+    retryingCount: 0,
+    pendingQueue: [],
+    isPaused: false,
+    folderMetadata,
+  });
+
+  // Populate file info display
+  dom.fileInfo.classList.remove('hidden');
+  dom.infoFilename.textContent = file.name + (folderMetadata ? ' (Folder Archive)' : '');
+  dom.infoFilesize.textContent = `${formatBytes(file.size)} (${file.size.toLocaleString()} bytes)`;
+  dom.infoChunks.textContent = `${state.totalChunks} x ${formatBytes(CHUNK_SIZE)}`;
+  dom.infoHash.textContent = 'Computing...';
+  dom.dropZone.classList.add('has-file');
+  dom.uploadControls.classList.remove('hidden');
+  dom.btnStart.disabled = true;
+  dom.btnResume.disabled = true;
+  dom.metricsPanel.classList.remove('hidden');
+  dom.metricSpeed.textContent = '-- MB/s';
+  dom.metricProgress.textContent = '0%';
+  dom.overallProgressBar.style.width = '0%';
+
+  setPhase('hashing');
+  log(`Selected: ${file.name} (${formatBytes(file.size)}, ${state.totalChunks} chunks)`, 'info');
+
+  try {
+    const hash = await computeFileSHA256(file);
+    state.fileHash = hash;
+    dom.infoHash.textContent = hash;
+    dom.hashProgressContainer.classList.add('hidden');
+    log(`SHA-256 computed: ${hash.slice(0, 16)}...`, 'info');
+    setPhase('ready');
+    dom.btnStart.disabled = false;
+    dom.btnResume.disabled = false;
+  } catch (err) {
+    log(`SHA-256 computation failed: ${err.message}`, 'error');
+    setPhase('error');
+  }
+}
+
+/* ----------------------------------------------------------------------------
+   Session Initialization
+   ---------------------------------------------------------------------------- */
+async function initSession() {
+  const params = new URLSearchParams({
+    fileHash: state.fileHash,
+    fileName: state.file.name,
+    totalChunks: String(state.totalChunks),
+    fileSizeBytes: String(state.file.size),
+  });
+
+  const res = await fetch(`${CONFIG.API_BASE_URL}/api/upload/status?${params}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body.error?.message || `Session init failed: ${res.status}`);
+  }
+  return res.json();
+}
+
+/* ----------------------------------------------------------------------------
+   Single Chunk Upload (with retry)
+   ---------------------------------------------------------------------------- */
+async function uploadChunkWithRetry(index) {
+  const chunk = state.chunks[index];
+  let lastError = null;
+  let wasRetrying = false;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (state.isPaused) {
+      if (wasRetrying) state.retryingCount--;
+      return false; // signal paused
+    }
+
+    if (attempt > 0) {
+      if (!wasRetrying) {
+        wasRetrying = true;
+        state.retryingCount++;
+      }
+      const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+      log(`Chunk ${index}: retry ${attempt}/${MAX_RETRIES} in ${delay}ms`, 'warn');
+      await new Promise((r) => setTimeout(r, delay));
+    }
+
+    setPacketState(index, 'uploading');
+
+    try {
+      const start = chunk.index * CHUNK_SIZE;
+      const blob = state.file.slice(start, start + CHUNK_SIZE);
+      const arrayBuffer = await blob.arrayBuffer();
+      const chunkHash = await computeChunkSHA256(arrayBuffer);
+
+      const res = await fetch(`${CONFIG.API_BASE_URL}/api/upload/chunk`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'x-upload-session-id': state.sessionId,
+          'x-chunk-index': String(index),
+          'x-chunk-hash': chunkHash,
+        },
+        body: arrayBuffer,
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error?.message || `HTTP ${res.status}`);
+      }
+
+      const data = await res.json();
+      setPacketState(index, 'success');
+      state.uploadedBytes += blob.size;
+      state.speedSamples.push({ time: Date.now(), bytes: state.uploadedBytes });
+      log(`Chunk ${index} uploaded (${formatBytes(blob.size)})`, 'success');
+      updateMetrics();
+      if (wasRetrying) state.retryingCount--;
+      return true;
+    } catch (err) {
+      lastError = err;
+      setPacketState(index, 'pending'); // reset to pending so retry shows as uploading again
+    }
+  }
+
+  setPacketState(index, 'failed');
+  log(`Chunk ${index} failed after ${MAX_RETRIES} retries: ${lastError?.message}`, 'error');
+  updateMetrics();
+  if (wasRetrying) state.retryingCount--;
+  return false;
+}
+
+/* ----------------------------------------------------------------------------
+   Concurrency Pool
+   Processes the pendingQueue with at most CONCURRENCY_LIMIT parallel uploads.
+   Returns a Promise that resolves once the queue is drained.
+   ---------------------------------------------------------------------------- */
+async function runConcurrencyPool() {
+  const results = { success: 0, failed: 0 };
+
+  return new Promise((resolve) => {
+    let completed = 0;
+    const total = state.pendingQueue.length;
+
+    if (total === 0) {
+      resolve(results);
+      return;
+    }
+
+    const dispatch = async () => {
+      while (
+        !state.isPaused &&
+        state.retryingCount === 0 &&
+        state.activeUploads < CONCURRENCY_LIMIT &&
+        state.pendingQueue.length > 0
+      ) {
+        const index = state.pendingQueue.shift();
+        state.activeUploads++;
+
+        uploadChunkWithRetry(index)
+          .then((ok) => {
+            state.activeUploads--;
+            if (ok) {
+              results.success++;
+            } else {
+              results.failed++;
+              state.pendingQueue = []; // halt all new uploads immediately on fatal error
+              log('Upload halted completely due to fatal chunk failure.', 'error');
+            }
+            completed++;
+            if (state.pendingQueue.length === 0 && state.activeUploads === 0) {
+              resolve(results);
+            } else if (!state.isPaused && state.retryingCount === 0 && state.pendingQueue.length > 0) {
+              dispatch();
+            }
+          });
+      }
+
+      if (state.isPaused && state.activeUploads === 0) {
+        resolve(results);
+      }
+    };
+
+    dispatch();
+  });
+}
+
+/* ----------------------------------------------------------------------------
+   Start / Resume Upload
+   ---------------------------------------------------------------------------- */
+async function startUpload(isResume = false) {
+  if (!state.file || !state.fileHash) {
+    log('No file selected or hash not computed', 'warn');
+    return;
+  }
+
+  state.isPaused = false;
+  setPhase('uploading');
+  dom.btnStart.classList.add('hidden');
+  dom.btnResume.classList.add('hidden');
+  dom.btnPause.classList.remove('hidden');
+  dom.btnReset.classList.add('hidden');
+
+  log(isResume ? 'Resuming upload...' : 'Starting upload...', 'info');
+
+  try {
+    // Obtain or rehydrate session
+    log('Initializing upload session with server...', 'info');
+    const session = await initSession();
+    state.sessionId = session.sessionId;
+
+    const alreadyDone = new Set(session.uploadedChunks);
+    log(
+      `Session ready. ${alreadyDone.size} of ${state.totalChunks} chunks already uploaded.`,
+      'info'
+    );
+
+    // Initialize chunk state array
+    state.chunks = Array.from({ length: state.totalChunks }, (_, i) => ({
+      index: i,
+      status: alreadyDone.has(i) ? 'success' : 'pending',
+      retries: 0,
+    }));
+    state.uploadedBytes = alreadyDone.size * CHUNK_SIZE;
+    state.startTime = Date.now();
+    state.speedSamples = [];
+
+    // Build / re-render packet matrix
+    buildMatrix(state.totalChunks);
+    // Mark already-succeeded packets green immediately
+    for (const idx of alreadyDone) {
+      setPacketState(idx, 'success');
+    }
+    updateMetrics();
+
+    // Populate upload queue with only pending chunks
+    state.pendingQueue = state.chunks
+      .filter((c) => c.status === 'pending')
+      .map((c) => c.index);
+
+    if (state.pendingQueue.length === 0) {
+      log('All chunks already uploaded. Proceeding to merge.', 'info');
+      await triggerMerge();
+      return;
+    }
+
+    dom.metricsPanel.classList.remove('hidden');
+    const results = await runConcurrencyPool();
+
+    if (state.isPaused) {
+      setPhase('paused');
+      dom.btnPause.classList.add('hidden');
+      dom.btnResume.classList.remove('hidden');
+      dom.btnResume.disabled = false;
+      dom.btnReset.classList.remove('hidden');
+      log('Upload paused.', 'warn');
+      return;
+    }
+
+    if (results.failed > 0) {
+      setPhase('error');
+      dom.btnPause.classList.add('hidden');
+      dom.btnResume.classList.remove('hidden');
+      dom.btnResume.disabled = false;
+      dom.btnReset.classList.remove('hidden');
+      log(
+        `Upload finished with ${results.failed} failed chunks. Click Resume to retry failed chunks.`,
+        'error'
+      );
+      return;
+    }
+
+    log(`All ${state.totalChunks} chunks uploaded. Triggering merge...`, 'info');
+    await triggerMerge();
+  } catch (err) {
+    setPhase('error');
+    dom.btnPause.classList.add('hidden');
+    dom.btnResume.classList.remove('hidden');
+    dom.btnResume.disabled = false;
+    dom.btnReset.classList.remove('hidden');
+    log(`Upload error: ${err.message}`, 'error');
+  }
+}
+
+/* ----------------------------------------------------------------------------
+   Resume: re-enqueue failed and pending chunks
+   ---------------------------------------------------------------------------- */
+async function resumeUpload() {
+  if (!state.sessionId) {
+    // No session in memory yet (e.g. page reload) - start fresh which will query server
+    await startUpload(true);
+    return;
+  }
+
+  state.isPaused = false;
+  setPhase('uploading');
+  dom.btnPause.classList.remove('hidden');
+  dom.btnResume.classList.add('hidden');
+  dom.btnReset.classList.add('hidden');
+
+  // Re-enqueue failed and pending chunks
+  state.pendingQueue = state.chunks
+    .filter((c) => c.status === 'failed' || c.status === 'pending')
+    .map((c) => c.index);
+
+  log(`Resuming: ${state.pendingQueue.length} chunks to re-upload.`, 'info');
+
+  const results = await runConcurrencyPool();
+
+  if (state.isPaused) {
+    setPhase('paused');
+    dom.btnPause.classList.add('hidden');
+    dom.btnResume.classList.remove('hidden');
+    dom.btnResume.disabled = false;
+    dom.btnReset.classList.remove('hidden');
+    log('Upload paused.', 'warn');
+    return;
+  }
+
+  if (results.failed > 0) {
+    setPhase('error');
+    dom.btnPause.classList.add('hidden');
+    dom.btnResume.classList.remove('hidden');
+    dom.btnResume.disabled = false;
+    dom.btnReset.classList.remove('hidden');
+    log(`${results.failed} chunks still failing. Try Resume again.`, 'error');
+    return;
+  }
+
+  log('All pending chunks re-uploaded. Triggering merge...', 'info');
+  await triggerMerge();
+}
+
+/* ----------------------------------------------------------------------------
+   Merge
+   ---------------------------------------------------------------------------- */
+async function triggerMerge() {
+  setPhase('merging');
+  dom.btnPause.classList.add('hidden');
+  log('Merge request sent. Server is assembling file and verifying SHA-256...', 'info');
+
+  const overallBar = dom.overallProgressBar;
+  overallBar.style.width = '100%';
+  overallBar.classList.remove('progress-fill-primary');
+  overallBar.classList.add('progress-fill-success');
+
+  try {
+    const password = dom.uploadPassword.value.trim();
+    const payload = { sessionId: state.sessionId };
+    if (password) {
+      payload.password = password;
+    }
+    if (state.folderMetadata) {
+      payload.folderMetadata = state.folderMetadata;
+    }
+
+    const res = await fetch(`${CONFIG.API_BASE_URL}/api/upload/merge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error?.message || `Merge failed: ${res.status}`);
+    }
+
+    setPhase('complete');
+    dom.btnReset.classList.remove('hidden');
+    dom.metricSpeed.textContent = '-- MB/s';
+    log(`File assembled and SHA-256 verified.`, 'success');
+    log(`File hash: ${data.fileHash}`, 'success');
+
+    if (data.shareId) {
+      const link = `${window.location.origin}/api/download/${data.shareId}`;
+      dom.shareUrl.value = link;
+      dom.shareModal.classList.remove('hidden');
+      
+      saveSessionUpload({
+        shareId: data.shareId,
+        editToken: data.editToken,
+        fileName: state.folderMetadata ? state.file.name + '.zip' : state.file.name,
+        size: state.fileSizeBytes || state.file.size
+      });
+    }
+
+    if (data.cloudUrl) {
+      dom.cloudUrl.value = data.cloudUrl;
+      dom.cloudLinkContainer.style.display = 'block';
+    } else {
+      dom.cloudLinkContainer.style.display = 'none';
+    }
+
+    // Show visual completion flourish
+    const ring = document.createElement('div');
+    ring.className = 'complete-ring';
+    ring.setAttribute('aria-hidden', 'true');
+    ring.innerHTML = `<svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+      <path d="M6 14l6 6 10-12" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+    dom.metricsPanel.prepend(ring);
+  } catch (err) {
+    setPhase('error');
+    dom.btnResume.classList.remove('hidden');
+    dom.btnResume.disabled = false;
+    dom.btnReset.classList.remove('hidden');
+    log(`Merge failed: ${err.message}`, 'error');
+  }
+}
+
+/* ----------------------------------------------------------------------------
+   Pause
+   ---------------------------------------------------------------------------- */
+function pauseUpload() {
+  if (state.phase !== 'uploading') return;
+  state.isPaused = true;
+  log('Pause requested. Waiting for active uploads to finish...', 'warn');
+}
+
+/* ----------------------------------------------------------------------------
+   Reset
+   ---------------------------------------------------------------------------- */
+function resetState() {
+  Object.assign(state, {
+    phase: 'idle',
+    file: null,
+    fileHash: null,
+    sessionId: null,
+    totalChunks: 0,
+    chunks: [],
+    uploadedBytes: 0,
+    startTime: null,
+    speedSamples: [],
+    activeUploads: 0,
+    pendingQueue: [],
+    isPaused: false,
+    folderMetadata: null,
+  });
+
+  dom.fileInfo.classList.add('hidden');
+  dom.uploadControls.classList.add('hidden');
+  dom.metricsPanel.classList.add('hidden');
+  dom.matrixSection.classList.add('hidden');
+  dom.btnStart.classList.remove('hidden');
+  dom.btnStart.disabled = true;
+  dom.btnResume.classList.remove('hidden');
+  dom.btnResume.disabled = true;
+  dom.btnPause.classList.add('hidden');
+  dom.btnReset.classList.add('hidden');
+  dom.dropZone.classList.remove('has-file');
+  dom.overallProgressBar.style.width = '0%';
+  dom.overallProgressBar.classList.remove('progress-fill-success');
+  dom.overallProgressBar.classList.add('progress-fill-primary');
+  dom.fileInput.value = '';
+  dom.packetMatrix.innerHTML = '';
+  setPhase('idle');
+
+  // Remove completion ring if present
+  const ring = dom.metricsPanel.querySelector('.complete-ring');
+  if (ring) ring.remove();
+
+  log('Upload session reset.', 'info');
+  dom.fileInfo.classList.add('hidden');
+}
+
+/* ----------------------------------------------------------------------------
+   Event Listeners (Drag & Drop, Selection)
+   ---------------------------------------------------------------------------- */
+
+// Drag over/leave
+dom.dropZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dom.dropZone.classList.add('dragover');
+});
+dom.dropZone.addEventListener('dragleave', (e) => {
+  e.preventDefault();
+  dom.dropZone.classList.remove('dragover');
+});
+
+// Recursive folder parsing for drag and drop
+async function parseDataTransferItems(items) {
+  const files = [];
+  const entries = [];
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (item.webkitGetAsEntry) {
+      const entry = item.webkitGetAsEntry();
+      if (entry) entries.push(entry);
+    }
+  }
+
+  async function readEntry(entry, path = '') {
+    if (entry.isFile) {
+      const file = await new Promise((resolve) => entry.file(resolve));
+      // Manually set webkitRelativePath for virtual zip stitching
+      Object.defineProperty(file, 'webkitRelativePath', {
+        value: path + file.name,
+        writable: false
+      });
+      files.push(file);
+    } else if (entry.isDirectory) {
+      const dirReader = entry.createReader();
+      // createReader() only returns a max of 100 entries per call, so we must loop
+      let allEntries = [];
+      const readEntries = () => {
+        return new Promise((resolve) => {
+          dirReader.readEntries((entriesBatch) => {
+            if (entriesBatch.length > 0) {
+              allEntries = allEntries.concat(entriesBatch);
+              readEntries().then(resolve);
+            } else {
+              resolve();
+            }
+          });
+        });
+      };
+      await readEntries();
+      for (const e of allEntries) {
+        await readEntry(e, path + entry.name + '/');
+      }
+    }
+  }
+
+  for (const entry of entries) {
+    await readEntry(entry);
+  }
+  return files;
+}
+
+// Drop handler (supports both single files, multiple files, and dropped folders recursively)
+dom.dropZone.addEventListener('drop', async (e) => {
+  e.preventDefault();
+  dom.dropZone.classList.remove('dragover');
+  
+  if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+    dom.btnStart.textContent = "Scanning folder...";
+    dom.btnStart.disabled = true;
+    const files = await parseDataTransferItems(e.dataTransfer.items);
+    dom.btnStart.textContent = "Start Upload";
+    if (files.length > 0) {
+      handleMultiFileSelected(files, 'dropped_files');
+    }
+  } else if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    handleMultiFileSelected(e.dataTransfer.files, 'dropped_files');
+  }
+});
+
+// File input
+dom.fileInput.addEventListener('change', () => {
+  if (dom.fileInput.files.length > 0) {
+    handleMultiFileSelected(dom.fileInput.files, 'selected_files');
+  }
+});
+
+// Folder input
+dom.btnBrowseFolder.addEventListener('click', () => dom.folderInput.click());
+dom.folderInput.addEventListener('change', () => {
+  if (dom.folderInput.files.length > 0) {
+    handleMultiFileSelected(dom.folderInput.files, 'folder');
+  }
+});
+
+// Drop zone click / keyboard
+dom.dropZone.addEventListener('click', (e) => {
+  if (e.target.id === 'btn-browse-folder') return;
+  dom.fileInput.click();
+});
+dom.dropZone.addEventListener('keydown', (e) => {
+  if (e.target.id === 'btn-browse-folder') return;
+  if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    dom.fileInput.click();
+  }
+});
+
+// Drag and drop
+dom.dropZone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dom.dropZone.classList.add('drag-active');
+});
+
+dom.dropZone.addEventListener('dragleave', (e) => {
+  if (!dom.dropZone.contains(e.relatedTarget)) {
+    dom.dropZone.classList.remove('drag-active');
+  }
+});
+
+dom.dropZone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dom.dropZone.classList.remove('drag-active');
+  const file = e.dataTransfer.files[0];
+  if (file) handleFileSelected(file);
+});
+
+// Upload control buttons
+dom.btnStart.addEventListener('click', () => startUpload(false));
+dom.btnResume.addEventListener('click', () => {
+  if (state.sessionId) resumeUpload();
+  else startUpload(true);
+});
+dom.btnPause.addEventListener('click', pauseUpload);
+dom.btnReset.addEventListener('click', resetState);
+
+// Copy link
+dom.btnCopyLink.addEventListener('click', () => {
+  navigator.clipboard.writeText(dom.shareUrl.value);
+  dom.btnCopyLink.textContent = 'Copied!';
+  setTimeout(() => (dom.btnCopyLink.textContent = 'Copy'), 2000);
+});
+
+if (dom.btnCopyCloud) {
+  dom.btnCopyCloud.addEventListener('click', () => {
+    navigator.clipboard.writeText(dom.cloudUrl.value);
+    dom.btnCopyCloud.textContent = 'Copied!';
+    setTimeout(() => (dom.btnCopyCloud.textContent = 'Copy'), 2000);
+  });
+}
+
+// Close Modal
+dom.btnCloseModal.addEventListener('click', () => {
+  dom.shareModal.classList.add('hidden');
+  resetState();
+});
+
+// Activity log clear
+dom.btnClearLog.addEventListener('click', () => {
+  dom.activityLog.innerHTML = '';
+  showLogEmpty();
+});
+
+/* ----------------------------------------------------------------------------
+   Active Session Dashboard
+   ---------------------------------------------------------------------------- */
+function saveSessionUpload(fileData) {
+  let uploads = JSON.parse(localStorage.getItem('dfus_uploads') || '[]');
+  uploads.push(fileData);
+  localStorage.setItem('dfus_uploads', JSON.stringify(uploads));
+  renderDashboard();
+}
+
+function renderDashboard() {
+  const uploads = JSON.parse(localStorage.getItem('dfus_uploads') || '[]');
+  if (uploads.length === 0) {
+    dom.dashboard.classList.add('hidden');
+    return;
+  }
+  
+  dom.dashboard.classList.remove('hidden');
+  dom.dashboardTbody.innerHTML = '';
+  
+  // Render backwards to show newest first
+  [...uploads].reverse().forEach((u, i) => {
+    const index = uploads.length - 1 - i;
+    const tr = document.createElement('tr');
+    tr.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+    
+    tr.innerHTML = `
+      <td style="padding: 12px 8px; word-break: break-all;">
+        <div style="font-weight: 500; color: #f1f5f9;">${u.fileName}</div>
+        <div class="small mono" style="color: #64748b; margin-top: 4px;">ID: ${u.shareId}</div>
+      </td>
+      <td style="padding: 12px 8px;" class="mono">${formatBytes(u.size)}</td>
+      <td style="padding: 12px 8px; white-space: nowrap;">
+        <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 12px;" onclick="renameUpload(${index})">Rename</button>
+        <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 12px;" onclick="copyUploadLink(${index})">Link</button>
+        <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 12px; color: #ef4444; border-color: #ef4444;" onclick="deleteUpload(${index})">Delete</button>
+      </td>
+    `;
+    dom.dashboardTbody.appendChild(tr);
+  });
+}
+
+window.renameUpload = async function(index) {
+  const uploads = JSON.parse(localStorage.getItem('dfus_uploads') || '[]');
+  const u = uploads[index];
+  const newName = prompt('Enter new name for file:', u.fileName);
+  if (!newName || newName === u.fileName) return;
+  
+  try {
+    const res = await fetch(`${CONFIG.API_BASE_URL}/api/manage/${u.shareId}/rename`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', 'x-edit-token': u.editToken },
+      body: JSON.stringify({ newName })
+    });
+    if (!res.ok) throw new Error('Rename failed');
+    u.fileName = newName;
+    localStorage.setItem('dfus_uploads', JSON.stringify(uploads));
+    renderDashboard();
+    alert('File renamed successfully!');
+  } catch (err) {
+    alert('Failed to rename: ' + err.message);
+  }
+};
+
+window.deleteUpload = async function(index) {
+  const uploads = JSON.parse(localStorage.getItem('dfus_uploads') || '[]');
+  const u = uploads[index];
+  if (!confirm('Are you sure you want to delete ' + u.fileName + '?')) return;
+  
+  try {
+    const res = await fetch(`${CONFIG.API_BASE_URL}/api/manage/${u.shareId}`, {
+      method: 'DELETE',
+      headers: { 'x-edit-token': u.editToken }
+    });
+    if (!res.ok) throw new Error('Delete failed');
+    uploads.splice(index, 1);
+    localStorage.setItem('dfus_uploads', JSON.stringify(uploads));
+    renderDashboard();
+    alert('File deleted successfully!');
+  } catch (err) {
+    alert('Failed to delete: ' + err.message);
+  }
+};
+
+window.copyUploadLink = function(index) {
+  const uploads = JSON.parse(localStorage.getItem('dfus_uploads') || '[]');
+  const u = uploads[index];
+  const link = window.location.origin + '/api/download/' + u.shareId;
+  navigator.clipboard.writeText(link);
+  alert('Download link copied to clipboard!');
+};
+
+
+/* ----------------------------------------------------------------------------
+   Initialization
+   ---------------------------------------------------------------------------- */
+initSpeedChart();
+setPhase('idle');
+showLogEmpty();
+checkServerHealth();
+renderDashboard();
+// Re-check server health every 30 seconds
+setInterval(checkServerHealth, 30_000);

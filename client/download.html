@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DFUS - Download File</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <header class="app-header">
+      <div class="logo">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span>DFUS Download Engine</span>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <section class="panel upload-panel" id="download-panel">
+        <h1 class="panel-title" id="file-name" style="word-break: break-all;">Loading...</h1>
+        <p class="drop-secondary" id="file-size" style="margin-bottom: 24px;">Please wait</p>
+        
+        <div id="password-section" class="hidden" style="margin-bottom: 24px;">
+          <input type="password" id="input-password" class="input-field" placeholder="Enter file password" />
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <button id="btn-download-local" class="btn btn-primary" disabled>
+            <span class="btn-text">Distributed P2P Download (Fast)</span>
+          </button>
+          
+          <button id="btn-download-cloud" class="btn btn-secondary hidden">
+            <span class="btn-text">Download from Cloud (Gofile)</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- Distributed Download Engine Metrics -->
+      <section class="panel metrics-panel hidden" id="download-metrics" aria-labelledby="metrics-heading">
+        <h2 id="metrics-heading" class="panel-title">Download Telemetry</h2>
+        <div class="metrics-grid" style="grid-template-columns: repeat(3, 1fr);">
+          <div class="metric-card">
+            <div class="metric-label">Progress</div>
+            <div class="metric-value mono" id="metric-progress">0%</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Speed</div>
+            <div class="metric-value mono" id="metric-speed">- MB/s</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Downloaded</div>
+            <div class="metric-value mono" id="metric-downloaded">0 / 0</div>
+          </div>
+        </div>
+
+        <div class="progress-container overall-progress" id="progress-bar-container">
+          <div class="progress-track">
+            <div id="progress-bar" class="progress-fill progress-fill-primary"></div>
+          </div>
+        </div>
+        
+        <p class="small" style="color: #64748b; margin-top: 16px; text-align: center;" id="download-status">Initializing engine...</p>
+      </section>
+    </main>
+  </div>
+  
+  <script src="config.js"></script>
+  <script src="download.js"></script>
+</body>
+</html>
