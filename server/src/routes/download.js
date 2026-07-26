@@ -28,6 +28,7 @@ router.get('/:shareId/info', async (req, res, next) => {
       sizeBytes: record.sizeBytes,
       isFolder: record.isFolder,
       requiresPassword: !!record.passwordHash,
+      selfDestruct: record.selfDestruct,
       expiresAt: record.expiresAt,
       cloudUrl: record.cloudUrl,
     });
@@ -89,12 +90,54 @@ router.get('/:shareId/stream', async (req, res, next) => {
     }
 
     // res.download automatically handles HTTP Range requests perfectly!
-    res.download(record.storagePath, record.originalName, (err) => {
+    res.download(record.storagePath, record.originalName, async (err) => {
       if (err && !res.headersSent) {
         console.error(`Error streaming download for ${shareId}:`, err.message);
       }
+
+      // If it's a fallback download (no Range) and self-destruct is true, burn it after sending
+      if (record.selfDestruct && (!req.headers.range || req.headers.range.startsWith('bytes=0-'))) {
+        const { safeDelete } = require('../utils/pathUtils');
+        await safeDelete(record.storagePath).catch(() => {});
+        await FileRecord.deleteOne({ _id: record._id }).catch(() => {});
+        console.log(`[Burn] File ${shareId} has self-destructed via fallback stream.`);
+      }
     });
 
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// POST /api/download/:shareId/burn
+// ---------------------------------------------------------------------------
+// Triggered by frontend after a successful download if selfDestruct is true.
+// ---------------------------------------------------------------------------
+router.post('/:shareId/burn', async (req, res, next) => {
+  try {
+    const { shareId } = req.params;
+    const { password } = req.body || {};
+
+    const record = await FileRecord.findOne({ shareId });
+    if (!record || !record.selfDestruct) {
+      return res.json({ status: 'ignored' });
+    }
+
+    if (record.passwordHash) {
+      if (!password) return res.status(401).json({ error: 'Password required' });
+      const isMatch = await bcrypt.compare(password, record.passwordHash);
+      if (!isMatch) return res.status(403).json({ error: 'Incorrect password' });
+    }
+
+    // Burn the file
+    const { safeDelete } = require('../utils/pathUtils');
+    await safeDelete(record.storagePath).catch(() => {});
+    await FileRecord.deleteOne({ _id: record._id });
+
+    // Try to delete from Cloud if possible (Gofile free API doesn't support delete without account token, but we remove the local link)
+    console.log(`[Burn] File ${shareId} has self-destructed.`);
+    res.json({ status: 'burned' });
   } catch (err) {
     next(err);
   }

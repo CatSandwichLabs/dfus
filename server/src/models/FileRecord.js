@@ -35,6 +35,7 @@ const fileRecordSchema = new mongoose.Schema({
   },
   passwordHash: { type: String, default: null },
   cloudUrl: { type: String, default: null },
+  selfDestruct: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
   downloadCount: {
     type: Number,

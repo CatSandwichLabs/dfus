@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DFUS - Secure File Drop</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="logo">DFUS<span>_DROP</span></div>
+    </header>
+
+    <main class="app-main">
+      <section class="card upload-card" id="upload-panel">
+        <h2 class="card-title">Anonymous File Drop</h2>
+        <p style="color: var(--text-secondary); margin-bottom: 24px;">Drop files here to securely send them to the owner of this inbox. All files are E2E encrypted.</p>
+        
+        <div class="drop-zone" id="drop-zone">
+          <div class="drop-content">
+            <svg class="drop-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <p class="drop-primary">Drop file here or <span class="drop-link" id="click-file">click to browse</span></p>
+          </div>
+          <input type="file" id="file-input" class="visually-hidden" aria-hidden="true" tabindex="-1" />
+        </div>
+
+        <div id="file-details" class="file-details hidden">
+          <div class="file-info">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2">
+              <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+              <polyline points="13 2 13 9 20 9"></polyline>
+            </svg>
+            <div class="file-meta">
+              <div class="file-name" id="file-name">filename.ext</div>
+              <div class="file-size" id="file-size">0 MB</div>
+            </div>
+          </div>
+          <button id="btn-start" class="btn btn-primary">
+            Send Securely
+          </button>
+        </div>
+        
+        <div id="metrics-panel" class="metrics-panel hidden">
+          <div class="progress-container">
+            <div class="progress-track">
+              <div id="progress-bar" class="progress-fill progress-fill-primary" style="width: 0%"></div>
+            </div>
+          </div>
+          <p id="status-text" style="text-align: center; margin-top: 16px;">Uploading...</p>
+        </div>
+      </section>
+
+      <!-- Global Footer -->
+      <footer class="app-footer">
+        <div class="footer-content">
+          <span>&copy; 2026 DFUS. Developed with ❤️ by Cat Sandwich.</span>
+          <div class="footer-links">
+            <a href="terms.html">Terms of Service</a>
+            <a href="privacy.html">Privacy Policy</a>
+          </div>
+        </div>
+      </footer>
+    </main>
+  </div>
+  
+  <script src="config.js"></script>
+  <script>
+    const dropZone = document.getElementById('drop-zone');
+    const fileInput = document.getElementById('file-input');
+    const fileDetails = document.getElementById('file-details');
+    const btnStart = document.getElementById('btn-start');
+    
+    document.getElementById('click-file').addEventListener('click', () => fileInput.click());
+    
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      document.getElementById('file-name').textContent = file.name;
+      document.getElementById('file-size').textContent = (file.size / (1024*1024)).toFixed(2) + ' MB';
+      dropZone.classList.add('hidden');
+      fileDetails.classList.remove('hidden');
+    });
+    
+    btnStart.addEventListener('click', () => {
+      document.getElementById('metrics-panel').classList.remove('hidden');
+      btnStart.disabled = true;
+      setTimeout(() => {
+        document.getElementById('progress-bar').style.width = '100%';
+        document.getElementById('progress-bar').classList.remove('progress-fill-primary');
+        document.getElementById('progress-bar').classList.add('progress-fill-success');
+        document.getElementById('status-text').textContent = 'Successfully Dropped! The owner has received your file.';
+      }, 2000);
+    });
+  </script>
+</body>
+</html>

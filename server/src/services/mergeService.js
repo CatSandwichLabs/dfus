@@ -79,7 +79,7 @@ async function uploadToGofile(filePath) {
  * @param {Array} [folderMetadata] - Array of { path, start, end } if uploading a folder
  * @returns {Promise<{ message: string, finalPath: string, fileHash: string, shareId?: string }>}
  */
-async function mergeChunks(sessionId, password, folderMetadata) {
+async function mergeChunks(sessionId, password, folderMetadata, selfDestruct = false) {
   if (!mongoose.isValidObjectId(sessionId)) {
     const err = new Error('Invalid sessionId');
     err.statusCode = 400;
@@ -266,6 +266,7 @@ async function mergeChunks(sessionId, password, folderMetadata) {
       isFolder,
       passwordHash,
       cloudUrl,
+      selfDestruct: !!selfDestruct,
       expiresAt
     });
     

@@ -10,6 +10,9 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
 </head>
 <body>
   <div class="app-shell">
@@ -39,11 +42,30 @@
           <span class="status-label" id="status-label">Connecting...</span>
         </div>
         <div class="header-config">
+          <select id="theme-switcher" class="input-field" style="padding: 2px 8px; font-size: 0.75rem; width: auto; background: var(--bg-surface); border: 1px solid var(--border);">
+            <option value="default">Midnight Blue</option>
+            <option value="hacker">Hacker Green</option>
+            <option value="cyberpunk">Cyberpunk Pink</option>
+            <option value="crimson">Crimson Red</option>
+          </select>
+          <span class="config-badge version-badge" onclick="window.location.href='changelog.html'" title="View Changelog" style="cursor: pointer;">v1.1.0</span>
           <span class="config-badge" title="Chunk size">5 MB chunks</span>
-          <span class="config-badge" title="Max parallel uploads">3x parallel</span>
+          <span class="config-badge" title="Max parallel uploads">4x parallel</span>
         </div>
       </div>
     </header>
+    
+    <script>
+      document.getElementById('theme-switcher').addEventListener('change', (e) => {
+        document.documentElement.setAttribute('data-theme', e.target.value);
+        localStorage.setItem('dfus_theme', e.target.value);
+      });
+      const savedTheme = localStorage.getItem('dfus_theme');
+      if (savedTheme) {
+        document.documentElement.setAttribute('data-theme', savedTheme);
+        document.getElementById('theme-switcher').value = savedTheme;
+      }
+    </script>
 
     <!-- ================================================================ -->
     <!-- Main Content                                                      -->
@@ -108,11 +130,167 @@
           </div>
         </div>
 
+        <!-- Processing Options -->
+        <div id="processing-options" class="advanced-options-container hidden" style="margin-top: 24px; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+          <h3 class="info-label" style="margin-bottom: 12px; color: var(--primary);">Processing Options (WebAssembly AI)</h3>
+          
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <!-- Compression -->
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <label for="opt-compress" style="font-size: 0.9rem;">Compress Image/PDF</label>
+                <p class="drop-secondary" style="font-size: 12px; margin: 0;">Shrink file before upload.</p>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="number" id="opt-compress-size" class="input-field" placeholder="Target MB" style="width: 100px; padding: 4px;" disabled />
+                <label class="toggle-switch">
+                  <input type="checkbox" id="opt-compress" onchange="document.getElementById('opt-compress-size').disabled = !this.checked">
+                  <span class="slider round"></span>
+                </label>
+              </div>
+            </div>
+
+            <!-- AI Background Removal -->
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <label for="opt-rmbg" style="font-size: 0.9rem;">Remove Background (AI)</label>
+                <p class="drop-secondary" style="font-size: 12px; margin: 0;">For images only. Runs locally.</p>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="opt-rmbg">
+                <span class="slider round"></span>
+              </label>
+            </div>
+
+            <!-- Video Transcoding -->
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <label for="opt-transcode" style="font-size: 0.9rem;">Transcode Video (H.264)</label>
+                <p class="drop-secondary" style="font-size: 12px; margin: 0;">Convert heavy .mov/.mkv to .mp4.</p>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="process-bg-remove" />
+              <span class="slider round"></span>
+            </label>
+            <label class="toggle-container" style="margin-top: 12px;">
+              <span class="toggle-label">Visual Watermarking (Images/PDF)</span>
+              <input type="checkbox" id="process-watermark" />
+              <span class="slider round"></span>
+            </label>
+            <label class="toggle-container" style="margin-top: 12px;">
+              <span class="toggle-label">Audio Transcription (WASM)</span>
+              <input type="checkbox" id="process-transcribe" />
+              <span class="slider round"></span>
+            </label>
+          </div>
+        </div>    
+            <!-- E2EE -->
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <label for="opt-e2ee" style="font-size: 0.9rem; color: #4ade80;">End-to-End Encryption</label>
+                <p class="drop-secondary" style="font-size: 12px; margin: 0;">Zero-knowledge AES-256-GCM encryption.</p>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="opt-e2ee">
+                <span class="slider round"></span>
+              </label>
+            </div>
+            
+            <!-- IPFS Pinning -->
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <label for="opt-ipfs" style="font-size: 0.9rem; color: #a855f7;">IPFS Web3 Pinning</label>
+                <p class="drop-secondary" style="font-size: 12px; margin: 0;">Mirror to the decentralized IPFS network.</p>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="opt-ipfs">
+                <span class="slider round"></span>
+              </label>
+            </div>
+            
+            <!-- WebRTC P2P -->
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <label for="opt-webrtc" style="font-size: 0.9rem; color: #3b82f6;">WebRTC Direct P2P</label>
+                <p class="drop-secondary" style="font-size: 12px; margin: 0;">Bypass server. Send directly to peer (requires both online).</p>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="opt-webrtc">
+                <span class="slider round"></span>
+              </label>
+            </div>
+            
+            <!-- Bandwidth QoS -->
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <div style="flex: 1; padding-right: 16px;">
+                <label for="opt-qos" style="font-size: 0.9rem; color: #f59e0b;">Bandwidth Throttling (QoS)</label>
+                <p class="drop-secondary" style="font-size: 12px; margin: 0;">Limit maximum upload speed.</p>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span class="mono small" id="qos-label">Unlimited</span>
+                <input type="range" id="opt-qos" min="0" max="100" value="0" style="width: 100px;">
+              </div>
+            </div>
+            <script>
+              document.getElementById('opt-qos').addEventListener('input', (e) => {
+                const val = parseInt(e.target.value, 10);
+                document.getElementById('qos-label').textContent = val === 0 ? 'Unlimited' : `${val} MB/s`;
+              });
+            </script>
+          </div>
+        </div>
+
         <!-- Upload Controls -->
         <div id="upload-controls" class="upload-controls hidden">
-          <div class="password-protect-container" style="margin-bottom: 16px;">
-            <label for="upload-password" class="info-label">Optional: Protect with password</label>
-            <input type="password" id="upload-password" class="input-field" placeholder="Enter password (optional)" />
+          <div class="advanced-options-container" style="margin-bottom: 24px; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+            <div class="password-protect-container" style="margin-bottom: 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <label for="upload-password" class="info-label" style="margin-bottom: 0;">Optional: Protect with password</label>
+                <button id="btn-generate-password" class="btn-text small" style="color: #4ade80;">Auto-Generate</button>
+              </div>
+              <input type="password" id="upload-password" class="input-field" placeholder="Enter password (optional)" />
+            </div>
+            <div class="self-destruct-container" style="display: flex; align-items: center; justify-content: space-between;">
+              <div>
+                <label for="upload-self-destruct" class="info-label" style="margin-bottom: 4px; color: #f87171;">Burn After Reading</label>
+                <p class="drop-secondary" style="font-size: 12px; margin: 0;">File automatically deletes after the first download.</p>
+              </div>
+              <label class="toggle-switch">
+                <input type="checkbox" id="upload-self-destruct">
+                <span class="slider round"></span>
+              </label>
+            </div>
+            <div style="margin-top: 12px; margin-bottom: 8px; font-size: 0.8rem; color: var(--text-secondary);">
+              Geoblocking (Restrict Download)
+            </div>
+            <select id="upload-geoblock" class="input-field" style="padding: 6px; font-size: 0.8rem; background: var(--bg-surface); border: 1px solid var(--border); width: 100%; margin-bottom: 8px;">
+              <option value="none">No Restrictions (Global)</option>
+              <option value="US">Block United States</option>
+              <option value="EU">Block European Union (GDPR)</option>
+              <option value="CN">Block China</option>
+              <option value="RU">Block Russia</option>
+            </select>
+            
+            <div style="display: flex; gap: 8px; margin-top: 8px;">
+              <div style="flex: 1;">
+                <div style="margin-bottom: 4px; font-size: 0.8rem; color: var(--text-secondary);">Max Downloads</div>
+                <input type="number" id="upload-max-downloads" class="input-field" placeholder="Unlimited" min="1" style="padding: 6px; font-size: 0.8rem; width: 100%;" />
+              </div>
+              <div style="flex: 1;">
+                <div style="margin-bottom: 4px; font-size: 0.8rem; color: var(--text-secondary);">Expires In</div>
+                <select id="upload-expiration" class="input-field" style="padding: 6px; font-size: 0.8rem; width: 100%;">
+                  <option value="never">Never</option>
+                  <option value="1h">1 Hour</option>
+                  <option value="24h">24 Hours</option>
+                  <option value="7d">7 Days</option>
+                </select>
+              </div>
+            </div>
+            
+            <div style="margin-top: 12px; margin-bottom: 4px; font-size: 0.8rem; color: var(--text-secondary);">
+              Download Webhook URL (Optional)
+            </div>
+            <input type="url" id="upload-webhook" class="input-field" placeholder="https://your-server.com/webhook" style="padding: 6px; font-size: 0.8rem; width: 100%; margin-bottom: 8px;" />
           </div>
           <button id="btn-start" class="btn btn-primary" disabled>
             <span class="btn-icon" aria-hidden="true">
@@ -160,6 +338,10 @@
             <div class="metric-value mono" id="metric-uploaded">0 / 0</div>
           </div>
           <div class="metric-card">
+            <div class="metric-label">Time Left</div>
+            <div class="metric-value mono" id="metric-eta">--:--</div>
+          </div>
+          <div class="metric-card" style="grid-column: span 2;">
             <div class="metric-label">Status</div>
             <div class="metric-value" id="metric-status">
               <span class="status-badge" id="status-badge">IDLE</span>
@@ -242,6 +424,32 @@
         <div id="activity-log" class="activity-log" role="log" aria-live="polite" aria-relevant="additions"></div>
       </section>
 
+      <!-- Analytics Dashboard -->
+      <section class="panel analytics-panel" aria-labelledby="analytics-heading" style="margin-top: 16px;">
+        <div class="log-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <h2 id="analytics-heading" class="panel-title" style="color: #a855f7;">Transfer Analytics & History</h2>
+          <div>
+            <button id="btn-export-pdf" class="btn btn-secondary btn-sm" onclick="exportAnalyticsPDF()">Export PDF</button>
+            <button id="btn-clear-history" class="btn-text btn-sm" onclick="clearAnalyticsHistory()">Clear</button>
+          </div>
+        </div>
+        <div style="background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
+          <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem;">
+            <thead>
+              <tr style="background: var(--bg-surface); border-bottom: 1px solid var(--border);">
+                <th style="padding: 12px; font-weight: 500; color: var(--text-secondary);">Date</th>
+                <th style="padding: 12px; font-weight: 500; color: var(--text-secondary);">File Name</th>
+                <th style="padding: 12px; font-weight: 500; color: var(--text-secondary);">Size</th>
+                <th style="padding: 12px; font-weight: 500; color: var(--text-secondary);">Link</th>
+              </tr>
+            </thead>
+            <tbody id="analytics-table-body">
+              <tr><td colspan="4" style="padding: 16px; text-align: center; color: var(--text-dim);">No history available yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
     </main>
     
     <!-- Share Modal -->
@@ -263,14 +471,43 @@
             <button id="btn-copy-cloud" class="btn btn-secondary">Copy</button>
           </div>
         </div>
+        <div style="margin-top: 24px; display: flex; justify-content: center;">
+          <div id="qrcode" style="background: white; padding: 16px; border-radius: 8px; display: none;"></div>
+        </div>
         <div style="margin-top: 24px; text-align: right;">
           <button id="btn-close-modal" class="btn btn-primary">Done</button>
         </div>
       </div>
     </div>
+    <!-- Global Footer -->
+    <footer class="app-footer">
+      <div class="footer-content">
+        <span>&copy; 2026 DFUS. Developed with ❤️ by Cat Sandwich.</span>
+        <div class="footer-links">
+          <a href="terms.html">Terms of Service</a>
+          <a href="privacy.html">Privacy Policy</a>
+        </div>
+      </div>
+    </footer>
   </div>
 
+  <!-- External Libraries for Advanced Features -->
+  <!-- browser-image-compression for fast image shrinking -->
+  <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js"></script>
+  <!-- Background Removal AI -->
+  <script src="https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.3/dist/browser/index.js"></script>
+  <!-- FFmpeg.wasm for Video Transcoding -->
+  <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
+  <!-- PeerJS for WebRTC P2P -->
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <!-- IPFS HTTP Client for Decentralized Pinning -->
+  <script src="https://cdn.jsdelivr.net/npm/ipfs-http-client@60.0.1/dist/index.min.js"></script>
+  
   <script src="config.js"></script>
+  <script src="e2ee.js"></script>
+  <script src="webrtc.js"></script>
+  <script src="ipfs.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

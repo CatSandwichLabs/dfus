@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Changelog - DFUS</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .changelog-content { max-width: 800px; margin: 40px auto; padding: 32px; background: var(--bg-panel); border-radius: 8px; }
+    h1 { color: var(--primary); margin-bottom: 24px; }
+    .version-block { border-left: 2px solid var(--primary); padding-left: 16px; margin-bottom: 32px; }
+    .version-title { font-size: 1.4rem; color: var(--text-primary); margin-bottom: 4px; display: flex; align-items: center; gap: 8px;}
+    .version-date { color: var(--text-dim); font-size: 0.85rem; font-family: monospace; }
+    ul { list-style: none; margin-top: 12px; }
+    li { margin-bottom: 8px; color: var(--text-secondary); display: flex; gap: 8px; }
+    li::before { content: "•"; color: var(--primary); }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="app-header">
+      <div class="header-brand">
+        <a href="index.html" style="text-decoration: none; display: flex; align-items: center; gap: 16px;">
+          <h1 class="brand-name" style="margin:0;">DFUS</h1>
+        </a>
+      </div>
+    </header>
+    <main class="changelog-content">
+      <h1>Version History</h1>
+      
+      <div class="version-block">
+        <div class="version-title">v1.1.0 <span class="config-badge" style="background: var(--success); color: #064e3b; border: none;">LATEST</span></div>
+        <div class="version-date">July 26, 2026</div>
+        <ul>
+          <li><strong>Self-Destruct Mode:</strong> Files can now be marked to "Burn After Reading", securely deleting them instantly after one download.</li>
+          <li><strong>Dynamic ETA:</strong> The upload dashboard now calculates and displays real-time remaining time limits.</li>
+          <li><strong>QR Code Generation:</strong> Instantly share files across devices with built-in QR Code generation.</li>
+          <li><strong>Auto-Password Generation:</strong> Create highly secure 16-character passwords with one click.</li>
+          <li><strong>Premium UI Overhaul:</strong> Added speed telemetry graphs, granular processing states, and overall glassmorphism aesthetics.</li>
+          <li><strong>Legal Framework:</strong> Introduced Terms of Service and Privacy Policy for production deployment.</li>
+        </ul>
+      </div>
+
+      <div class="version-block">
+        <div class="version-title">v1.0.0</div>
+        <div class="version-date">July 26, 2026</div>
+        <ul>
+          <li><strong>Initial Release:</strong> Deployed DFUS globally on Render and Cloudflare Pages.</li>
+          <li><strong>Multi-threaded Engine:</strong> Core engine capable of splitting files into 5MB chunks and dispatching them concurrently.</li>
+          <li><strong>SHA-256 Integrity:</strong> Cryptographic verification of files post-merge.</li>
+          <li><strong>Cloud Backup:</strong> Automatic integration with Gofile.io for persistent mirroring.</li>
+          <li><strong>Password Protection:</strong> AES-like security for restricting download access.</li>
+        </ul>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
