@@ -327,7 +327,10 @@ async function checkServerHealth(retries = 5) {
   dom.serverStatusEl.className = 'server-status checking';
   dom.statusLabel.textContent = 'Connecting...';
   try {
-    const res = await fetch(`${CONFIG.API_BASE_URL}/status`, { signal: AbortSignal.timeout(10000) });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const res = await fetch(`${CONFIG.API_BASE_URL}/status`, { signal: controller.signal });
+    clearTimeout(timeoutId);
     if (res.ok) {
       dom.serverStatusEl.className = 'server-status online';
       dom.statusLabel.textContent = 'Server online';
