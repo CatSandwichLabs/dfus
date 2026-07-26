@@ -146,11 +146,18 @@ router.get('/:shareId/stream', async (req, res, next) => {
       }
 
       // If it's a fallback download (no Range) and self-destruct is true, burn it after sending
+      // For chunked downloads (Range: bytes=0-), delay deletion to allow all concurrent chunks to finish.
       if (record.selfDestruct && (!req.headers.range || req.headers.range.startsWith('bytes=0-'))) {
-        const { safeDelete } = require('../utils/pathUtils');
-        await safeDelete(record.storagePath).catch(() => {});
-        await FileRecord.deleteOne({ _id: record._id }).catch(() => {});
-        console.log(`[Burn] File ${shareId} has self-destructed via fallback stream.`);
+        // Prevent multiple timers if requested multiple times
+        if (!record._burnScheduled) {
+          record._burnScheduled = true;
+          setTimeout(async () => {
+            const { safeDelete } = require('../utils/pathUtils');
+            await safeDelete(record.storagePath).catch(() => {});
+            await FileRecord.deleteOne({ _id: record._id }).catch(() => {});
+            console.log(`[Burn] File ${shareId} has self-destructed after 15m delay.`);
+          }, 15 * 60 * 1000);
+        }
       }
     });
 
