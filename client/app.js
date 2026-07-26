@@ -479,7 +479,11 @@ async function computeFileSHA256(file) {
 /* ----------------------------------------------------------------------------
    Multi-File / Folder Selection Handler
    ---------------------------------------------------------------------------- */
-function handleMultiFileSelected(files, fallbackName = 'archive') {
+function fallbackName() {
+  return `dfus_bundle_${new Date().getTime().toString(36)}`;
+}
+
+async function handleMultiFileSelected(files, fallbackNameStr = 'archive') {
   if (!files || files.length === 0) return;
   if (state.phase === 'uploading' || state.phase === 'merging') {
     log('Cannot change file while an upload is in progress', 'warn');
@@ -493,7 +497,7 @@ function handleMultiFileSelected(files, fallbackName = 'archive') {
   }
 
   const firstPath = fileArray[0].webkitRelativePath;
-  const folderName = (firstPath ? firstPath.split('/')[0] : fallbackName) || fallbackName;
+  const folderName = (firstPath ? firstPath.split('/')[0] : fallbackNameStr) || fallbackNameStr;
   
   log(`Folder selected with ${fileArray.length} files. Initiating WASM ZIP compression...`, 'info');
   dom.statusTxt.textContent = 'Compressing Folder...';
