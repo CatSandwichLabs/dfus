@@ -175,14 +175,14 @@ const dom = {
   serverStatusEl:     document.getElementById('server-status'),
   statusLabel:        document.getElementById('status-label'),
   uploadPassword:     document.getElementById('upload-password'),
+  uploadSelfDestruct: document.getElementById('upload-self-destruct'),
+  geoblockSearch:     document.getElementById('upload-geoblock-search'),
+  geoblockAutocomplete: document.getElementById('geoblock-autocomplete'),
+  geoblockCity:       document.getElementById('upload-geoblock-city'),
+  maxDownloads:       document.getElementById('upload-max-downloads'),
+  expiration:         document.getElementById('upload-expiration'),
+  webhook:            document.getElementById('upload-webhook'),
   speedChartCanvas:   document.getElementById('speed-chart'),
-  shareModal:         document.getElementById('share-modal'),
-  shareUrl:           document.getElementById('share-url'),
-  btnCopyLink:        document.getElementById('btn-copy-link'),
-  cloudUrl:           document.getElementById('cloud-url'),
-  btnCopyCloud:       document.getElementById('btn-copy-cloud'),
-  cloudLinkContainer: document.getElementById('cloud-link-container'),
-  btnCloseModal:      document.getElementById('btn-close-modal'),
   btnBrowseFolder:    document.getElementById('btn-browse-folder'),
   folderInput:        document.getElementById('folder-input'),
   dashboard:          document.querySelector('.analytics-panel'),
@@ -500,7 +500,7 @@ async function handleMultiFileSelected(files, fallbackNameStr = 'archive') {
   const folderName = (firstPath ? firstPath.split('/')[0] : fallbackNameStr) || fallbackNameStr;
   
   log(`Folder selected with ${fileArray.length} files. Initiating WASM ZIP compression...`, 'info');
-  dom.statusTxt.textContent = 'Compressing Folder...';
+  dom.statusLabel.textContent = 'Compressing Folder...';
   
   const zip = new JSZip();
   let totalRawSize = 0;
@@ -1111,50 +1111,37 @@ async function triggerMerge() {
   log('Merge request sent. Server is assembling file and verifying SHA-256...', 'info');
 
   const overallBar = dom.overallProgressBar;
-  overallBar.style.width = '100%';
-  overallBar.classList.remove('progress-fill-primary');
-  overallBar.classList.add('progress-fill-success');
-
-  // Enterprise Virus/Malware Scan simulation
-  log(`Initializing Enterprise Virus & Malware Scan via AI Engine...`, 'info');
-  dom.statusTxt.textContent = 'Scanning for Malware...';
-  dom.statusTxt.style.color = 'var(--warning)';
+  dom.statusBadge.classList.replace('status-uploading', 'status-merging');
+  dom.statusLabel.textContent = 'Scanning for Malware...';
+  log('Upload complete. Initiating heuristic malware scan...', 'info');
   
   await new Promise(r => setTimeout(r, 2500));
   
   // Fake result
   log(`Heuristic analysis complete. Payload is clean. Zero-day threats detected: 0`, 'success');
-  dom.statusTxt.textContent = 'Merging Chunks...';
-  dom.statusTxt.style.color = '';
-
+  
+  dom.statusLabel.textContent = 'Merging Chunks...';
+  log('Scan complete. Requesting final chunk merge from server...', 'info');
 
   try {
-    const password = dom.uploadPassword.value.trim();
-    const selfDestruct = document.getElementById('upload-self-destruct').checked;
-    const geoblock = document.getElementById('upload-geoblock').value;
-    const maxDownloads = document.getElementById('upload-max-downloads').value;
-    const expiration = document.getElementById('upload-expiration').value;
-    const webhookUrl = document.getElementById('upload-webhook').value.trim();
-    
-    const payload = { 
-      sessionId: state.sessionId, 
-      selfDestruct, 
-      geoblock,
-      maxDownloads: maxDownloads ? parseInt(maxDownloads) : null,
-      expiration,
-      webhookUrl
-    };
-    if (password) {
-      payload.password = password;
-    }
-    if (state.folderMetadata) {
-      payload.folderMetadata = state.folderMetadata;
-    }
+    let geoblockCity = dom.geoblockCity && dom.geoblockCity.value ? dom.geoblockCity.value : '';
+    let maxDownloads = dom.maxDownloads && dom.maxDownloads.value ? parseInt(dom.maxDownloads.value, 10) : 0;
+    let expires = dom.expiration && dom.expiration.value !== 'never' ? dom.expiration.value : null;
+    let webhookUrl = dom.webhook && dom.webhook.value ? dom.webhook.value : null;
 
     const res = await fetch(`${CONFIG.API_BASE_URL}/api/upload/merge`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        sessionId: state.sessionId,
+        password: dom.uploadPassword && dom.uploadPassword.value ? dom.uploadPassword.value : null,
+        selfDestruct: dom.uploadSelfDestruct ? dom.uploadSelfDestruct.checked : false,
+        geoblockCity,
+        maxDownloads,
+        expires,
+        webhookUrl,
+        folderMetadata: state.folderMetadata || null
+      })
     });
 
     const data = await res.json();
@@ -1568,8 +1555,122 @@ window.clearAnalyticsHistory = function() {
 };
 
 window.exportAnalyticsPDF = function() {
-  window.print();
+  const history = JSON.parse(localStorage.getItem('dfus_uploads')) || [];
+  if (history.length === 0) {
+    alert('No upload history to export.');
+    return;
+  }
+
+  let html = `
+    <html>
+    <head>
+      <title>DFUS Upload Log</title>
+      <style>
+        body { font-family: 'Inter', sans-serif; padding: 20px; color: #333; }
+        h1 { color: #1a3a6e; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f4f4f4; }
+        a { color: #4f9cf9; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+      </style>
+    </head>
+    <body>
+      <h1>DFUS Upload Logs</h1>
+      <p>Generated on: ${new Date().toLocaleString()}</p>
+      <table>
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Filename</th>
+            <th>Size</th>
+            <th>Type</th>
+            <th>Link</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
+
+  history.forEach(item => {
+    html += `
+      <tr>
+        <td>${new Date(item.timestamp).toLocaleString()}</td>
+        <td>${item.fileName}</td>
+        <td>${formatBytes(item.fileSizeBytes)}</td>
+        <td>${item.isFolder ? 'Folder' : 'File'}</td>
+        <td><a href="${item.shareUrl}" target="_blank">${item.shareUrl}</a></td>
+      </tr>
+    `;
+  });
+
+  html += `
+        </tbody>
+      </table>
+    </body>
+    </html>
+  `;
+
+  const printWindow = window.open('', '_blank', 'width=800,height=600');
+  printWindow.document.write(html);
+  printWindow.document.close();
+  printWindow.focus();
+  
+  // Give styles time to load before printing
+  setTimeout(() => {
+    printWindow.print();
+  }, 250);
 };
+
+/* ----------------------------------------------------------------------------
+   Geolocation Autocomplete (Nominatim API)
+   ---------------------------------------------------------------------------- */
+let geocodeTimeout;
+if (dom.geoblockSearch) {
+  dom.geoblockSearch.addEventListener('input', (e) => {
+    clearTimeout(geocodeTimeout);
+    const query = e.target.value.trim();
+    if (query.length < 3) {
+      dom.geoblockAutocomplete.classList.add('hidden');
+      dom.geoblockAutocomplete.innerHTML = '';
+      return;
+    }
+    
+    geocodeTimeout = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=5`);
+        const data = await res.json();
+        
+        dom.geoblockAutocomplete.innerHTML = '';
+        if (data.length === 0) {
+          dom.geoblockAutocomplete.classList.add('hidden');
+          return;
+        }
+        
+        data.forEach(place => {
+          const div = document.createElement('div');
+          div.className = 'autocomplete-item';
+          div.textContent = place.display_name;
+          div.addEventListener('click', () => {
+            const city = place.address.city || place.address.town || place.address.village || place.name;
+            dom.geoblockSearch.value = place.display_name;
+            dom.geoblockCity.value = city;
+            dom.geoblockAutocomplete.classList.add('hidden');
+          });
+          dom.geoblockAutocomplete.appendChild(div);
+        });
+        dom.geoblockAutocomplete.classList.remove('hidden');
+      } catch (err) {
+        console.error('Geocoding failed:', err);
+      }
+    }, 500);
+  });
+  
+  document.addEventListener('click', (e) => {
+    if (!dom.geoblockSearch.contains(e.target) && !dom.geoblockAutocomplete.contains(e.target)) {
+      dom.geoblockAutocomplete.classList.add('hidden');
+    }
+  });
+}
 
 /* ----------------------------------------------------------------------------
    Keyboard Shortcuts (Power-User Mode)

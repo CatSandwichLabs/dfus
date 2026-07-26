@@ -43,8 +43,11 @@ const fileRecordSchema = new mongoose.Schema({
   },
   expiresAt: {
     type: Date,
-    required: true,
-  }
+    required: false,
+  },
+  geoblockCity: { type: String, default: '' },
+  maxDownloads: { type: Number, default: 0 },
+  webhookUrl: { type: String, default: null }
 }, {
   timestamps: true,
 });

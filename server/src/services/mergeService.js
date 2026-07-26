@@ -79,7 +79,7 @@ async function uploadToGofile(filePath) {
  * @param {Array} [folderMetadata] - Array of { path, start, end } if uploading a folder
  * @returns {Promise<{ message: string, finalPath: string, fileHash: string, shareId?: string }>}
  */
-async function mergeChunks(sessionId, password, folderMetadata, selfDestruct = false) {
+async function mergeChunks(sessionId, password, folderMetadata, selfDestruct = false, geoblockCity = '', maxDownloads = 0, expires = null, webhookUrl = null) {
   if (!mongoose.isValidObjectId(sessionId)) {
     const err = new Error('Invalid sessionId');
     err.statusCode = 400;
@@ -249,9 +249,17 @@ async function mergeChunks(sessionId, password, folderMetadata, selfDestruct = f
       passwordHash = await bcrypt.hash(password, 10);
     }
     
-    // Default expiry: 7 days from now
-    const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7);
+    // Default expiry: 7 days from now, or use custom 'expires'
+    let expiresAt = new Date();
+    if (expires === '1h') {
+      expiresAt.setHours(expiresAt.getHours() + 1);
+    } else if (expires === '24h') {
+      expiresAt.setHours(expiresAt.getHours() + 24);
+    } else if (expires === 'never') {
+      expiresAt = null;
+    } else {
+      expiresAt.setDate(expiresAt.getDate() + 7);
+    }
 
     // Upload to Cloud
     const cloudUrl = await uploadToGofile(finalPath);
@@ -267,7 +275,10 @@ async function mergeChunks(sessionId, password, folderMetadata, selfDestruct = f
       passwordHash,
       cloudUrl,
       selfDestruct: !!selfDestruct,
-      expiresAt
+      expiresAt,
+      geoblockCity,
+      maxDownloads: maxDownloads || 0,
+      webhookUrl
     });
     
     await fileRecord.save();

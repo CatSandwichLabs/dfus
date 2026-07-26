@@ -137,7 +137,7 @@ router.post('/chunk', async (req, res, next) => {
 // ---------------------------------------------------------------------------
 router.post('/merge', express.json({ limit: '5mb' }), async (req, res, next) => {
   try {
-    const { sessionId, password, folderMetadata, selfDestruct } = req.body || {};
+    const { sessionId, password, folderMetadata, selfDestruct, geoblockCity, maxDownloads, expires, webhookUrl } = req.body || {};
 
     if (!sessionId) {
       return res.status(400).json({
@@ -145,7 +145,7 @@ router.post('/merge', express.json({ limit: '5mb' }), async (req, res, next) => 
       });
     }
 
-    const result = await mergeChunks(sessionId, password, folderMetadata, selfDestruct);
+    const result = await mergeChunks(sessionId, password, folderMetadata, selfDestruct, geoblockCity, maxDownloads, expires, webhookUrl);
     res.json(result);
   } catch (err) {
     next(err);

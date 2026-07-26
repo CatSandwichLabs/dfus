@@ -7,6 +7,41 @@ const FileRecord = require('../models/FileRecord');
 
 const router = express.Router();
 
+async function checkAccessRestrictions(req, res, record) {
+  // Check expires
+  if (record.expiresAt && new Date() > record.expiresAt) {
+    res.status(404).json({ error: { message: 'This file has expired.', status: 404 } });
+    return false;
+  }
+
+  // Check max downloads
+  if (record.maxDownloads > 0 && record.downloadCount >= record.maxDownloads) {
+    res.status(403).json({ error: { message: 'Maximum download limit reached.', status: 403 } });
+    return false;
+  }
+
+  // Check geoblock
+  if (record.geoblockCity) {
+    try {
+      const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+      if (ip && ip !== '::1' && ip !== '127.0.0.1' && !ip.startsWith('192.168.')) {
+        const geoRes = await fetch(`http://ip-api.com/json/${ip.split(',')[0].trim()}`);
+        const geoData = await geoRes.json();
+        if (geoData.status === 'success' && geoData.city) {
+          if (geoData.city.toLowerCase() !== record.geoblockCity.toLowerCase()) {
+            res.status(403).json({ error: { message: `Access denied. File is restricted to ${record.geoblockCity}. You are accessing from ${geoData.city}, ${geoData.country}.`, status: 403 } });
+            return false;
+          }
+        }
+      }
+    } catch (e) {
+      console.error('GeoIP lookup failed', e);
+    }
+  }
+
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // GET /api/download/:shareId/info
 // ---------------------------------------------------------------------------
@@ -22,6 +57,8 @@ router.get('/:shareId/info', async (req, res, next) => {
         error: { message: 'File not found or link expired', status: 404 },
       });
     }
+
+    if (!(await checkAccessRestrictions(req, res, record))) return;
 
     res.json({
       originalName: record.originalName,
@@ -63,6 +100,8 @@ router.get('/:shareId/stream', async (req, res, next) => {
       });
     }
 
+    if (!(await checkAccessRestrictions(req, res, record))) return;
+
     if (record.passwordHash) {
       if (!password) {
         return res.status(401).json({
@@ -87,6 +126,17 @@ router.get('/:shareId/stream', async (req, res, next) => {
     // Update download count if not a Range request or if it's the first byte
     if (!req.headers.range || req.headers.range.startsWith('bytes=0-')) {
       await FileRecord.updateOne({ _id: record._id }, { $inc: { downloadCount: 1 } });
+      
+      // Fire webhook
+      if (record.webhookUrl) {
+        try {
+          fetch(record.webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ event: 'download_started', shareId, filename: record.originalName, timestamp: new Date() })
+          }).catch(() => {});
+        } catch (err) {}
+      }
     }
 
     // res.download automatically handles HTTP Range requests perfectly!

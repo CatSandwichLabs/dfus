@@ -41,7 +41,9 @@
           <span class="status-dot" id="status-dot"></span>
           <span class="status-label" id="status-label">Connecting...</span>
         </div>
-        <div class="header-config">
+        <div class="header-config" style="display: flex; gap: 12px; align-items: center;">
+          <a href="inbox.html" style="color: var(--primary); text-decoration: none; font-size: 0.85rem; font-weight: 500;">Go to Inbox</a>
+          <a href="changelog.html" style="color: var(--text-secondary); text-decoration: none; font-size: 0.85rem; font-weight: 500;">Changelog</a>
           <select id="theme-switcher" class="input-field" style="padding: 2px 8px; font-size: 0.75rem; width: auto; background: var(--bg-surface); border: 1px solid var(--border);">
             <option value="default">Midnight Blue</option>
             <option value="hacker">Hacker Green</option>
@@ -130,169 +132,200 @@
           </div>
         </div>
 
-        <!-- Processing Options -->
-        <div id="processing-options" class="advanced-options-container hidden" style="margin-top: 24px; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
-          <h3 class="info-label" style="margin-bottom: 12px; color: var(--primary);">Processing Options (WebAssembly AI)</h3>
+        <!-- Advanced Options Accordions -->
+        <div id="processing-options" class="hidden" style="margin-top: 24px; display: flex; flex-direction: column; gap: 12px;">
           
-          <div style="display: flex; flex-direction: column; gap: 12px;">
-            <!-- Compression -->
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-              <div>
-                <label for="opt-compress" style="font-size: 0.9rem;">Compress Image/PDF</label>
-                <p class="drop-secondary" style="font-size: 12px; margin: 0;">Shrink file before upload.</p>
-              </div>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <input type="number" id="opt-compress-size" class="input-field" placeholder="Target MB" style="width: 100px; padding: 4px;" disabled />
-                <label class="toggle-switch">
-                  <input type="checkbox" id="opt-compress" onchange="document.getElementById('opt-compress-size').disabled = !this.checked">
-                  <span class="slider round"></span>
-                </label>
-              </div>
-            </div>
+          <details class="accordion" open>
+            <summary class="accordion-summary">Media Processing & Network Rules</summary>
+            <div class="accordion-content">
+              <div style="display: flex; flex-direction: column; gap: 16px;">
+                
+                <!-- Compression -->
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <div>
+                    <label for="opt-compress" style="font-size: 0.9rem;">Compress Image/PDF</label>
+                    <p class="drop-secondary" style="font-size: 12px; margin: 0;">Shrink file before upload.</p>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <input type="number" id="opt-compress-size" class="input-field hidden" placeholder="Target KB" style="width: 100px; padding: 4px;" />
+                    <label class="toggle-switch">
+                      <input type="checkbox" id="opt-compress" onchange="const el = document.getElementById('opt-compress-size'); if(this.checked){el.classList.remove('hidden')}else{el.classList.add('hidden')}">
+                      <span class="slider round"></span>
+                    </label>
+                  </div>
+                </div>
 
-            <!-- AI Background Removal -->
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-              <div>
-                <label for="opt-rmbg" style="font-size: 0.9rem;">Remove Background (AI)</label>
-                <p class="drop-secondary" style="font-size: 12px; margin: 0;">For images only. Runs locally.</p>
-              </div>
-              <label class="toggle-switch">
-                <input type="checkbox" id="opt-rmbg">
-                <span class="slider round"></span>
-              </label>
-            </div>
+                <!-- AI Background Removal -->
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <div>
+                    <label for="opt-rmbg" style="font-size: 0.9rem;">Remove Background (AI)</label>
+                    <p class="drop-secondary" style="font-size: 12px; margin: 0;">For images only. Runs locally.</p>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="opt-rmbg">
+                    <span class="slider round"></span>
+                  </label>
+                </div>
 
-            <!-- Video Transcoding -->
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-              <div>
-                <label for="opt-transcode" style="font-size: 0.9rem;">Transcode Video (H.264)</label>
-                <p class="drop-secondary" style="font-size: 12px; margin: 0;">Convert heavy .mov/.mkv to .mp4.</p>
+                <!-- Video Transcoding -->
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <div>
+                    <label for="opt-transcode" style="font-size: 0.9rem;">Transcode Video (H.264)</label>
+                    <p class="drop-secondary" style="font-size: 12px; margin: 0;">Convert heavy .mov/.mkv to .mp4.</p>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="opt-transcode">
+                    <span class="slider round"></span>
+                  </label>
+                </div>
+
+                <!-- Visual Watermarking -->
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <div>
+                    <label for="process-watermark" style="font-size: 0.9rem;">Visual Watermarking</label>
+                    <p class="drop-secondary" style="font-size: 12px; margin: 0;">Apply watermark to Images/PDFs.</p>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="process-watermark">
+                    <span class="slider round"></span>
+                  </label>
+                </div>
+
+                <!-- Audio Transcription -->
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <div>
+                    <label for="process-transcribe" style="font-size: 0.9rem;">Audio Transcription</label>
+                    <p class="drop-secondary" style="font-size: 12px; margin: 0;">Transcribe audio locally (WASM).</p>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="process-transcribe">
+                    <span class="slider round"></span>
+                  </label>
+                </div>
+                
+                <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.05); margin: 4px 0;" />
+
+                <!-- IPFS Pinning -->
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <div>
+                    <label for="opt-ipfs" style="font-size: 0.9rem; color: #a855f7;">IPFS Web3 Pinning</label>
+                    <p class="drop-secondary" style="font-size: 12px; margin: 0;">Mirror to the decentralized IPFS network.</p>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="opt-ipfs">
+                    <span class="slider round"></span>
+                  </label>
+                </div>
+
+                <!-- WebRTC P2P -->
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <div>
+                    <label for="opt-webrtc" style="font-size: 0.9rem; color: #3b82f6;">WebRTC Direct P2P</label>
+                    <p class="drop-secondary" style="font-size: 12px; margin: 0;">Bypass server. Send directly to peer (requires both online).</p>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="opt-webrtc">
+                    <span class="slider round"></span>
+                  </label>
+                </div>
+
+                <!-- Bandwidth QoS -->
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <div style="flex: 1; padding-right: 16px;">
+                    <label for="opt-qos" style="font-size: 0.9rem; color: #f59e0b;">Bandwidth Throttling (QoS)</label>
+                    <p class="drop-secondary" style="font-size: 12px; margin: 0;">Limit maximum upload speed.</p>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="mono small" id="qos-label">Unlimited</span>
+                    <input type="range" id="opt-qos" min="0" max="100" value="0" style="width: 100px;">
+                  </div>
+                </div>
+                <script>
+                  document.getElementById('opt-qos').addEventListener('input', (e) => {
+                    const val = parseInt(e.target.value, 10);
+                    document.getElementById('qos-label').textContent = val === 0 ? 'Unlimited' : `${val} MB/s`;
+                  });
+                </script>
               </div>
-              <label class="toggle-switch">
-                <input type="checkbox" id="process-bg-remove" />
-              <span class="slider round"></span>
-            </label>
-            <label class="toggle-container" style="margin-top: 12px;">
-              <span class="toggle-label">Visual Watermarking (Images/PDF)</span>
-              <input type="checkbox" id="process-watermark" />
-              <span class="slider round"></span>
-            </label>
-            <label class="toggle-container" style="margin-top: 12px;">
-              <span class="toggle-label">Audio Transcription (WASM)</span>
-              <input type="checkbox" id="process-transcribe" />
-              <span class="slider round"></span>
-            </label>
-          </div>
-        </div>    
-            <!-- E2EE -->
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-              <div>
-                <label for="opt-e2ee" style="font-size: 0.9rem; color: #4ade80;">End-to-End Encryption</label>
-                <p class="drop-secondary" style="font-size: 12px; margin: 0;">Zero-knowledge AES-256-GCM encryption.</p>
-              </div>
-              <label class="toggle-switch">
-                <input type="checkbox" id="opt-e2ee">
-                <span class="slider round"></span>
-              </label>
             </div>
-            
-            <!-- IPFS Pinning -->
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-              <div>
-                <label for="opt-ipfs" style="font-size: 0.9rem; color: #a855f7;">IPFS Web3 Pinning</label>
-                <p class="drop-secondary" style="font-size: 12px; margin: 0;">Mirror to the decentralized IPFS network.</p>
+          </details>
+          
+          <details class="accordion">
+            <summary class="accordion-summary" style="color: #4ade80;">Security & Access Controls</summary>
+            <div class="accordion-content">
+              <div style="display: flex; flex-direction: column; gap: 16px;">
+                <!-- E2EE -->
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                  <div>
+                    <label for="opt-e2ee" style="font-size: 0.9rem; color: #4ade80;">End-to-End Encryption</label>
+                    <p class="drop-secondary" style="font-size: 12px; margin: 0;">Zero-knowledge AES-256-GCM encryption.</p>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="opt-e2ee">
+                    <span class="slider round"></span>
+                  </label>
+                </div>
+                
+                <div class="password-protect-container">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <label for="upload-password" class="info-label" style="margin-bottom: 0;">Password Protection</label>
+                    <button id="btn-generate-password" class="btn-text small" style="color: #4ade80;">Auto-Generate</button>
+                  </div>
+                  <input type="password" id="upload-password" class="input-field" placeholder="Enter password (optional)" />
+                </div>
+                
+                <div class="self-destruct-container" style="display: flex; align-items: center; justify-content: space-between;">
+                  <div>
+                    <label for="upload-self-destruct" class="info-label" style="margin-bottom: 4px; color: #f87171;">Burn After Reading</label>
+                    <p class="drop-secondary" style="font-size: 12px; margin: 0;">File automatically deletes after the first download.</p>
+                  </div>
+                  <label class="toggle-switch">
+                    <input type="checkbox" id="upload-self-destruct">
+                    <span class="slider round"></span>
+                  </label>
+                </div>
+                
+                <div>
+                  <div style="margin-bottom: 8px; font-size: 0.8rem; color: var(--text-secondary);">
+                    Geoblocking (Allow Only Specific Location)
+                  </div>
+                  <div style="position: relative;">
+                    <input type="text" id="upload-geoblock-search" class="input-field" placeholder="e.g. New Delhi" style="padding: 8px; font-size: 0.9rem; width: 100%;" autocomplete="off" />
+                    <div id="geoblock-autocomplete" class="autocomplete-dropdown hidden"></div>
+                    <input type="hidden" id="upload-geoblock-city" value="" />
+                  </div>
+                </div>
+                
+                <div style="display: flex; gap: 8px;">
+                  <div style="flex: 1;">
+                    <div style="margin-bottom: 4px; font-size: 0.8rem; color: var(--text-secondary);">Max Downloads</div>
+                    <input type="number" id="upload-max-downloads" class="input-field" placeholder="Unlimited" min="1" style="padding: 6px; font-size: 0.8rem; width: 100%;" />
+                  </div>
+                  <div style="flex: 1;">
+                    <div style="margin-bottom: 4px; font-size: 0.8rem; color: var(--text-secondary);">Expires In</div>
+                    <select id="upload-expiration" class="input-field" style="padding: 6px; font-size: 0.8rem; width: 100%;">
+                      <option value="never">Never</option>
+                      <option value="1h">1 Hour</option>
+                      <option value="24h">24 Hours</option>
+                      <option value="7d">7 Days</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div>
+                  <div style="margin-bottom: 4px; font-size: 0.8rem; color: var(--text-secondary);">
+                    Download Webhook URL (Optional)
+                  </div>
+                  <input type="url" id="upload-webhook" class="input-field" placeholder="https://your-server.com/webhook" style="padding: 6px; font-size: 0.8rem; width: 100%;" />
+                </div>
+                
               </div>
-              <label class="toggle-switch">
-                <input type="checkbox" id="opt-ipfs">
-                <span class="slider round"></span>
-              </label>
             </div>
-            
-            <!-- WebRTC P2P -->
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-              <div>
-                <label for="opt-webrtc" style="font-size: 0.9rem; color: #3b82f6;">WebRTC Direct P2P</label>
-                <p class="drop-secondary" style="font-size: 12px; margin: 0;">Bypass server. Send directly to peer (requires both online).</p>
-              </div>
-              <label class="toggle-switch">
-                <input type="checkbox" id="opt-webrtc">
-                <span class="slider round"></span>
-              </label>
-            </div>
-            
-            <!-- Bandwidth QoS -->
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-              <div style="flex: 1; padding-right: 16px;">
-                <label for="opt-qos" style="font-size: 0.9rem; color: #f59e0b;">Bandwidth Throttling (QoS)</label>
-                <p class="drop-secondary" style="font-size: 12px; margin: 0;">Limit maximum upload speed.</p>
-              </div>
-              <div style="display: flex; align-items: center; gap: 8px;">
-                <span class="mono small" id="qos-label">Unlimited</span>
-                <input type="range" id="opt-qos" min="0" max="100" value="0" style="width: 100px;">
-              </div>
-            </div>
-            <script>
-              document.getElementById('opt-qos').addEventListener('input', (e) => {
-                const val = parseInt(e.target.value, 10);
-                document.getElementById('qos-label').textContent = val === 0 ? 'Unlimited' : `${val} MB/s`;
-              });
-            </script>
-          </div>
+          </details>
         </div>
-
+        
         <!-- Upload Controls -->
-        <div id="upload-controls" class="upload-controls hidden">
-          <div class="advanced-options-container" style="margin-bottom: 24px; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
-            <div class="password-protect-container" style="margin-bottom: 16px;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <label for="upload-password" class="info-label" style="margin-bottom: 0;">Optional: Protect with password</label>
-                <button id="btn-generate-password" class="btn-text small" style="color: #4ade80;">Auto-Generate</button>
-              </div>
-              <input type="password" id="upload-password" class="input-field" placeholder="Enter password (optional)" />
-            </div>
-            <div class="self-destruct-container" style="display: flex; align-items: center; justify-content: space-between;">
-              <div>
-                <label for="upload-self-destruct" class="info-label" style="margin-bottom: 4px; color: #f87171;">Burn After Reading</label>
-                <p class="drop-secondary" style="font-size: 12px; margin: 0;">File automatically deletes after the first download.</p>
-              </div>
-              <label class="toggle-switch">
-                <input type="checkbox" id="upload-self-destruct">
-                <span class="slider round"></span>
-              </label>
-            </div>
-            <div style="margin-top: 12px; margin-bottom: 8px; font-size: 0.8rem; color: var(--text-secondary);">
-              Geoblocking (Restrict Download)
-            </div>
-            <select id="upload-geoblock" class="input-field" style="padding: 6px; font-size: 0.8rem; background: var(--bg-surface); border: 1px solid var(--border); width: 100%; margin-bottom: 8px;">
-              <option value="none">No Restrictions (Global)</option>
-              <option value="US">Block United States</option>
-              <option value="EU">Block European Union (GDPR)</option>
-              <option value="CN">Block China</option>
-              <option value="RU">Block Russia</option>
-            </select>
-            
-            <div style="display: flex; gap: 8px; margin-top: 8px;">
-              <div style="flex: 1;">
-                <div style="margin-bottom: 4px; font-size: 0.8rem; color: var(--text-secondary);">Max Downloads</div>
-                <input type="number" id="upload-max-downloads" class="input-field" placeholder="Unlimited" min="1" style="padding: 6px; font-size: 0.8rem; width: 100%;" />
-              </div>
-              <div style="flex: 1;">
-                <div style="margin-bottom: 4px; font-size: 0.8rem; color: var(--text-secondary);">Expires In</div>
-                <select id="upload-expiration" class="input-field" style="padding: 6px; font-size: 0.8rem; width: 100%;">
-                  <option value="never">Never</option>
-                  <option value="1h">1 Hour</option>
-                  <option value="24h">24 Hours</option>
-                  <option value="7d">7 Days</option>
-                </select>
-              </div>
-            </div>
-            
-            <div style="margin-top: 12px; margin-bottom: 4px; font-size: 0.8rem; color: var(--text-secondary);">
-              Download Webhook URL (Optional)
-            </div>
-            <input type="url" id="upload-webhook" class="input-field" placeholder="https://your-server.com/webhook" style="padding: 6px; font-size: 0.8rem; width: 100%; margin-bottom: 8px;" />
-          </div>
-          <button id="btn-start" class="btn btn-primary" disabled>
+        <div id="upload-controls" class="upload-controls hidden">  <button id="btn-start" class="btn btn-primary" disabled>
             <span class="btn-icon" aria-hidden="true">
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                 <path d="M3 2.5l10 5.5-10 5.5V2.5z"/>

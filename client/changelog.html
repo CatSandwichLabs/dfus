@@ -27,17 +27,29 @@
     </header>
     <main class="changelog-content">
       <h1>Version History</h1>
-      
       <div class="version-block">
-        <div class="version-title">v1.1.0 <span class="config-badge" style="background: var(--success); color: #064e3b; border: none;">LATEST</span></div>
+        <div class="version-title">v1.1.1 <span class="config-badge" style="background: var(--success); color: #064e3b; border: none;">LATEST</span></div>
         <div class="version-date">July 26, 2026</div>
         <ul>
+          <li><strong>Geoblocking & Location Picker:</strong> Real-time location autocomplete using OpenStreetMap Nominatim for highly granular download blocking (e.g. "Sarojini Nagar, Delhi"). Backed by server-side IP geolocation verification.</li>
+          <li><strong>Refined UI Layout:</strong> Reorganized advanced options into elegant, collapsible accordions for Media Processing and Security.</li>
+          <li><strong>File Compression Toggles:</strong> Fixed visibility of target compression size input.</li>
+          <li><strong>Bug Fix:</strong> Resolved "textContent of undefined" upload crash due to DOM desynchronization.</li>
+          <li><strong>PDF Export Upgrade:</strong> Export Analytics now generates a perfectly formatted tabular PDF containing file names and active share links, stripping away messy UI elements.</li>
+          <li><strong>Global Inbox Nav:</strong> Inbox is now easily accessible via the main navigation bar.</li>
+        </ul>
+      </div>
+
+      <div class="version-block">
+        <div class="version-title">v1.1.0</div>
+        <div class="version-date">July 26, 2026</div>
+        <ul>
+          <li><strong>Multi-Part Archiving:</strong> Upload entire folders. The system automatically creates a WebAssembly ZIP archive locally before chunking and uploading.</li>
+          <li><strong>Webhooks Integration:</strong> Added real-time HTTP event dispatching for automated tracking of downloads.</li>
+          <li><strong>Global Inbox (Anonymous Drop):</strong> Created `inbox.html` for receiving files anonymously from external users into a unified system inbox.</li>
           <li><strong>Self-Destruct Mode:</strong> Files can now be marked to "Burn After Reading", securely deleting them instantly after one download.</li>
-          <li><strong>Dynamic ETA:</strong> The upload dashboard now calculates and displays real-time remaining time limits.</li>
-          <li><strong>QR Code Generation:</strong> Instantly share files across devices with built-in QR Code generation.</li>
-          <li><strong>Auto-Password Generation:</strong> Create highly secure 16-character passwords with one click.</li>
-          <li><strong>Premium UI Overhaul:</strong> Added speed telemetry graphs, granular processing states, and overall glassmorphism aesthetics.</li>
-          <li><strong>Legal Framework:</strong> Introduced Terms of Service and Privacy Policy for production deployment.</li>
+          <li><strong>Dynamic ETA & UI Polish:</strong> Upload dashboard calculates real-time ETA.</li>
+          <li><strong>QR Code & Password Generation:</strong> Instantly share files across devices and generate secure 16-character passwords.</li>
         </ul>
       </div>
 
