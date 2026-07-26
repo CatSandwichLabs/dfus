@@ -325,7 +325,7 @@ async function checkServerHealth() {
   dom.serverStatusEl.className = 'server-status checking';
   dom.statusLabel.textContent = 'Connecting...';
   try {
-    const res = await fetch(`${CONFIG.API_BASE_URL}/health`, { signal: AbortSignal.timeout(4000) });
+    const res = await fetch(`${CONFIG.API_BASE_URL}/health`, { signal: AbortSignal.timeout(60000) });
     if (res.ok) {
       dom.serverStatusEl.className = 'server-status online';
       dom.statusLabel.textContent = 'Server online';
@@ -893,7 +893,7 @@ async function triggerMerge() {
     log(`File hash: ${data.fileHash}`, 'success');
 
     if (data.shareId) {
-      const link = `${window.location.origin}/api/download/${data.shareId}`;
+      const link = `${window.location.origin}/download.html?id=${data.shareId}`;
       dom.shareUrl.value = link;
       dom.shareModal.classList.remove('hidden');
       
@@ -1236,7 +1236,7 @@ window.deleteUpload = async function(index) {
 window.copyUploadLink = function(index) {
   const uploads = JSON.parse(localStorage.getItem('dfus_uploads') || '[]');
   const u = uploads[index];
-  const link = window.location.origin + '/api/download/' + u.shareId;
+  const link = window.location.origin + '/download.html?id=' + u.shareId;
   navigator.clipboard.writeText(link);
   alert('Download link copied to clipboard!');
 };

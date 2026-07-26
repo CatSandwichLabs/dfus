@@ -64,6 +64,14 @@ function createApp() {
     app.use(morgan(config.nodeEnv === 'production' ? 'combined' : 'dev'));
   }
 
+  // Redirect root traffic to Cloudflare Pages in production
+  app.get('/', (req, res, next) => {
+    if (config.nodeEnv === 'production') {
+      return res.redirect('https://dfus.pages.dev/');
+    }
+    next();
+  });
+
   // Serve the static frontend
   app.use(express.static(path.join(__dirname, '../client')));
 
