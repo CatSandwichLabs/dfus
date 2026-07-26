@@ -78,7 +78,7 @@ async function startDownload() {
     dom.statusTxt.textContent = 'Falling back to standard browser download...';
     let url = `/api/download/${shareId}/stream`;
     if (password) url += `?password=${encodeURIComponent(password)}`;
-    window.location.href = url;
+    window.location.href = `${CONFIG.API_BASE_URL}${url}`;
   }
 }
 
