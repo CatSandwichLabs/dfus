@@ -556,7 +556,7 @@ async function handleMultiFileSelected(files, fallbackNameStr = 'archive') {
           }
       });
 
-      await zipStream.pipeThrough(progressStream).pipeTo(writable);
+      await zipStream.body.pipeThrough(progressStream).pipeTo(writable);
       zipFile = await fileHandle.getFile();
     } else {
       // Fallback to JSZip (will crash on large folders)
