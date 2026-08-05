@@ -517,34 +517,64 @@ async function handleMultiFileSelected(files, fallbackNameStr = 'archive') {
   const firstPath = fileArray[0].webkitRelativePath;
   const folderName = (firstPath ? firstPath.split('/')[0] : fallbackNameStr) || fallbackNameStr;
   
-  log(`Folder selected with ${fileArray.length} files. Initiating WASM ZIP compression...`, 'info');
-  dom.statusLabel.textContent = 'Compressing Folder...';
+  log(`Folder selected with ${fileArray.length} files. Starting Web Streams ZIP compression to OPFS disk...`, 'info');
+  dom.statusLabel.textContent = 'Streaming Folder to Disk...';
   
-  const zip = new JSZip();
-  let totalRawSize = 0;
-  
-  for (const f of fileArray) {
-    totalRawSize += f.size;
-    zip.file(f.webkitRelativePath || f.name, f);
-  }
+  let totalRawSize = fileArray.reduce((acc, f) => acc + f.size, 0);
   
   try {
     dom.metricsPanel.classList.remove('hidden');
     dom.metricProgress.textContent = '0%';
     dom.overallProgressBar.style.width = '0%';
-    dom.metricSpeed.textContent = 'Zipping...';
+    dom.metricSpeed.textContent = 'Preparing Stream...';
 
-    const zipBlob = await zip.generateAsync({
-      type: 'blob',
-      compression: 'STORE', // Use STORE for maximum speed and lowest memory usage on large folders
-    }, function updateCallback(metadata) {
-      dom.metricProgress.textContent = metadata.percent.toFixed(1) + '%';
-      dom.overallProgressBar.style.width = metadata.percent + '%';
-      dom.statusLabel.textContent = `Zipping: ${metadata.currentFile || 'Archive'}...`;
-    });
+    // OPFS is supported in modern browsers. It allows writing directly to a local high-performance disk cache.
+    let zipFile;
+    if (navigator.storage && navigator.storage.getDirectory) {
+      const { downloadZip } = await import('https://unpkg.com/client-zip/index.js');
+      const root = await navigator.storage.getDirectory();
+      const fileHandle = await root.getFileHandle(`${folderName}.zip`, { create: true });
+      const writable = await fileHandle.createWritable();
+
+      const filesToZip = fileArray.map(f => ({
+          name: f.webkitRelativePath || f.name,
+          input: f, 
+      }));
+
+      const zipStream = downloadZip(filesToZip);
+      
+      let processed = 0;
+      const progressStream = new TransformStream({
+          transform(chunk, controller) {
+              processed += chunk.length;
+              // Note: chunk.length is compressed output size. We use raw size as a rough ceiling.
+              const pct = Math.min((processed / totalRawSize) * 100, 100);
+              dom.metricProgress.textContent = pct.toFixed(1) + '%';
+              dom.overallProgressBar.style.width = pct + '%';
+              dom.statusLabel.textContent = `Streaming to disk...`;
+              controller.enqueue(chunk);
+          }
+      });
+
+      await zipStream.pipeThrough(progressStream).pipeTo(writable);
+      zipFile = await fileHandle.getFile();
+    } else {
+      // Fallback to JSZip (will crash on large folders)
+      const zip = new JSZip();
+      for (const f of fileArray) {
+        zip.file(f.webkitRelativePath || f.name, f);
+      }
+      const zipBlob = await zip.generateAsync({
+        type: 'blob',
+        compression: 'STORE',
+      }, function updateCallback(metadata) {
+        dom.metricProgress.textContent = metadata.percent.toFixed(1) + '%';
+        dom.overallProgressBar.style.width = metadata.percent + '%';
+        dom.statusLabel.textContent = `Zipping: ${metadata.currentFile || 'Archive'}...`;
+      });
+      zipFile = new File([zipBlob], `${folderName}.zip`, { type: 'application/zip' });
+    }
     
-    // Create a File object from the Blob so handleFileSelected accepts it
-    const zipFile = new File([zipBlob], `${folderName}.zip`, { type: 'application/zip' });
     
     log(`Folder compressed. Original size: ${formatBytes(totalRawSize)} -> ZIP size: ${formatBytes(zipFile.size)}`, 'success');
     
