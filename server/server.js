@@ -82,7 +82,7 @@ function createApp() {
   app.use('/api/upload', uploadRoutes);
   app.use('/api/download', downloadRoutes);
   app.use('/api/manage', express.json(), managementRoutes);
-  app.use('/api/inbox', inboxRoutes);
+  app.use('/api/inbox', express.json(), inboxRoutes);
 
   app.get('/status', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
