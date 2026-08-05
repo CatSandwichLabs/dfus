@@ -529,10 +529,18 @@ async function handleMultiFileSelected(files, fallbackNameStr = 'archive') {
   }
   
   try {
+    dom.metricsPanel.classList.remove('hidden');
+    dom.metricProgress.textContent = '0%';
+    dom.overallProgressBar.style.width = '0%';
+    dom.metricSpeed.textContent = 'Zipping...';
+
     const zipBlob = await zip.generateAsync({
       type: 'blob',
-      compression: 'DEFLATE',
-      compressionOptions: { level: 6 } // standard compression
+      compression: 'STORE', // Use STORE for maximum speed and lowest memory usage on large folders
+    }, function updateCallback(metadata) {
+      dom.metricProgress.textContent = metadata.percent.toFixed(1) + '%';
+      dom.overallProgressBar.style.width = metadata.percent + '%';
+      dom.statusLabel.textContent = `Zipping: ${metadata.currentFile || 'Archive'}...`;
     });
     
     // Create a File object from the Blob so handleFileSelected accepts it
@@ -1133,16 +1141,8 @@ async function triggerMerge() {
 
   const overallBar = dom.overallProgressBar;
   dom.statusBadge.classList.replace('status-uploading', 'status-merging');
-  dom.statusLabel.textContent = 'Scanning for Malware...';
-  log('Upload complete. Initiating heuristic malware scan...', 'info');
-  
-  await new Promise(r => setTimeout(r, 2500));
-  
-  // Fake result
-  log(`Heuristic analysis complete. Payload is clean. Zero-day threats detected: 0`, 'success');
-  
   dom.statusLabel.textContent = 'Merging Chunks...';
-  log('Scan complete. Requesting final chunk merge from server...', 'info');
+  log('Upload complete. Requesting final chunk merge from server...', 'info');
 
   try {
     let geoblockCity = dom.geoblockCity && dom.geoblockCity.value ? dom.geoblockCity.value : '';
