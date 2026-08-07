@@ -9,10 +9,10 @@ class DatabaseConnection {
   constructor() {
     this.isConnected = false;
     // Fail fast on Vercel so we get a JSON error instead of a 10s timeout crash
-    const isServerless = process.env.VERCEL === '1';
+    this.isServerless = process.env.VERCEL === '1';
     this.retryCount = 0;
-    this.maxRetries = isServerless ? 0 : 5;
-    this.baseDelayMs = isServerless ? 500 : 1000;
+    this.maxRetries = this.isServerless ? 0 : 5;
+    this.baseDelayMs = this.isServerless ? 500 : 1000;
   }
 
   async connect() {
@@ -23,6 +23,8 @@ class DatabaseConnection {
     if (!config.MONGO.URI) {
       throw new Error('MONGODB_URI is not defined in environment variables.');
     }
+
+    mongoose.set('bufferCommands', false);
 
     mongoose.connection.on('connected', () => {
       logger.info('Successfully connected to MongoDB Atlas.');
@@ -44,12 +46,21 @@ class DatabaseConnection {
   }
 
   async connectWithRetry() {
+    if (this.retryCount === 0 && this.maxRetries === 0) {
+      logger.info('Attempting to connect to MongoDB...');
+      await mongoose.connect(config.MONGO.URI, {
+        serverSelectionTimeoutMS: this.isServerless ? 3000 : 5000,
+        bufferCommands: false,
+      });
+      return;
+    }
+
     while (this.retryCount < this.maxRetries) {
       try {
         logger.info(`Attempting to connect to MongoDB (Attempt ${this.retryCount + 1}/${this.maxRetries})...`);
         await mongoose.connect(config.MONGO.URI, {
-          // Additional Mongoose configuration can be added here if needed in mongoose 8.x
-          serverSelectionTimeoutMS: isServerless ? 3000 : 5000,
+          serverSelectionTimeoutMS: this.isServerless ? 3000 : 5000,
+          bufferCommands: false, // Fail fast instead of buffering indefinitely
         });
         return; // Success
       } catch (err) {

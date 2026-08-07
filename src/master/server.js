@@ -63,6 +63,18 @@ app.use(async (req, res, next) => {
       dbInitPromise = initDatabase();
     }
     await dbInitPromise;
+    
+    // Serverless warm-start reconnection logic
+    if (process.env.VERCEL === '1') {
+      const mongoose = require('mongoose');
+      // readyState 0 = disconnected, 1 = connected, 2 = connecting, 3 = disconnecting
+      if (mongoose.connection.readyState === 0) {
+        const dbConnection = require('../repositories/mongodb/connection');
+        dbConnection.isConnected = false;
+        await dbConnection.connectWithRetry();
+      }
+    }
+
     next();
   } catch (err) {
     logger.error('Database initialization failed:', err);
