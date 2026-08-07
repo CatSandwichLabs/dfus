@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const config = require('../../config/env');
-const logger = require('../../utils/logger');
+const { createLogger } = require('../../utils/logger');
+const logger = createLogger('database');
 
 /**
  * MongoDB Atlas Connection with Exponential Backoff Retry
