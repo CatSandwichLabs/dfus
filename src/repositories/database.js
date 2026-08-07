@@ -39,11 +39,21 @@ async function initDatabase() {
   return initPromise;
 }
 
-function getDatabase() {
-  if (!dbInstance) {
-    throw new Error('Database not initialized. Call initDatabase() on startup.');
+const dbProxy = new Proxy({}, {
+  get: (target, prop) => {
+    if (!dbInstance) {
+      throw new Error(`Database not initialized. Cannot access ${prop}`);
+    }
+    const value = dbInstance[prop];
+    if (typeof value === 'function') {
+      return value.bind(dbInstance);
+    }
+    return value;
   }
-  return dbInstance;
+});
+
+function getDatabase() {
+  return dbProxy;
 }
 
 module.exports = {
