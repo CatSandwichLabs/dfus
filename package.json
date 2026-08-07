@@ -4,7 +4,7 @@
   "description": "Distributed Resumable File Upload System",
   "private": true,
   "engines": {
-    "node": ">=18.0.0"
+    "node": "22.x"
   },
   "scripts": {
     "start:master": "node src/master/server.js",
