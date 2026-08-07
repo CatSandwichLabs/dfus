@@ -71,7 +71,7 @@ class AuthService {
     // 2. Verify Firebase ID Token
     let decodedToken;
     try {
-      const admin = require('firebase-admin');
+      const admin = require('../../config/firebase');
       if (admin.apps.length > 0) {
         decodedToken = await admin.auth().verifyIdToken(idToken);
       } else {

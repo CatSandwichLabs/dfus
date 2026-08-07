@@ -45,7 +45,8 @@ export default function Register({ setToken }) {
         setToken(data.token);
         navigate('/dashboard');
       } else {
-        setError(data.error || 'Failed to sync with backend');
+        const errMsg = typeof data.error === 'object' ? data.error.message : data.error;
+        setError(errMsg || 'Failed to sync with backend');
       }
     } catch (err) {
       setError('Network error syncing with backend.');
