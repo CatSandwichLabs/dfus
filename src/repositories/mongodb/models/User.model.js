@@ -1,24 +1,33 @@
 const mongoose = require('mongoose');
 
 const UserSchema = new mongoose.Schema({
+  firebaseUid: {
+    type: String,
+    unique: true,
+    sparse: true
+  },
   username: {
     type: String,
-    required: true,
     unique: true,
+    sparse: true,
     trim: true,
     minlength: 3,
     maxlength: 30
   },
   email: {
     type: String,
-    required: true,
     unique: true,
+    sparse: true,
     lowercase: true,
     trim: true
   },
+  phone: {
+    type: String,
+    sparse: true
+  },
   passwordHash: {
     type: String,
-    required: true
+    required: false
   },
   role: {
     type: String,

@@ -116,6 +116,14 @@ class SqliteMetadataRepo extends IMetadataRepository {
     return this.db.prepare('SELECT * FROM users WHERE username = ?').get(username);
   }
 
+  async findUserByFirebaseUid(uid) {
+    return this.db.prepare('SELECT * FROM users WHERE firebaseUid = ?').get(uid);
+  }
+
+  async getUserCount() {
+    return this.db.prepare('SELECT COUNT(*) as count FROM users').get().count;
+  }
+
   async updateUser(userId, updateData) {
     const keys = Object.keys(updateData);
     if (keys.length === 0) return this.findUserById(userId);

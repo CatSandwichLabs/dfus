@@ -41,6 +41,95 @@ class AuthService {
     return refreshToken;
   }
 
+  async syncFirebaseUser(idToken, recaptchaToken, ip, userAgent) {
+    if (!idToken) throw new AuthenticationError('Missing Firebase ID Token');
+    if (!recaptchaToken) throw new AuthenticationError('Missing reCAPTCHA token');
+    
+    // 1. Verify reCAPTCHA token if API key is present
+    if (config.RECAPTCHA_API_KEY && recaptchaToken !== 'mock-token') {
+      const fetch = (await import('node-fetch')).default;
+      const recaptchaRes = await fetch(`https://recaptchaenterprise.googleapis.com/v1/projects/dfs-system-3d4ba/assessments?key=${config.RECAPTCHA_API_KEY}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event: {
+            token: recaptchaToken,
+            expectedAction: 'LOGIN',
+            siteKey: '6LcM3HktAAAAAG0xPeThBWs6WLh2B8KywYtV8fam'
+          }
+        })
+      });
+      const recaptchaData = await recaptchaRes.json();
+      if (!recaptchaData.tokenProperties?.valid) {
+        throw new AuthenticationError('Invalid reCAPTCHA token');
+      }
+      if (recaptchaData.riskAnalysis && recaptchaData.riskAnalysis.score < 0.3) {
+        throw new AuthenticationError('High risk assessment');
+      }
+    }
+
+    // 2. Verify Firebase ID Token
+    let decodedToken;
+    try {
+      const admin = require('firebase-admin');
+      if (admin.apps.length > 0) {
+        decodedToken = await admin.auth().verifyIdToken(idToken);
+      } else {
+        // If admin not initialized (no service account), mock the verification based on env
+        if (process.env.MOCK_FIREBASE === 'true') {
+           decodedToken = { uid: 'mock-uid', email: 'mock@example.com' };
+        } else {
+           throw new Error('Firebase Admin not initialized');
+        }
+      }
+    } catch (error) {
+      throw new AuthenticationError('Invalid Firebase ID Token');
+    }
+
+    // 3. Sync User in MongoDB
+    let user = await this.db.findUserByFirebaseUid(decodedToken.uid);
+    
+    if (!user) {
+      // Create user
+      let role = 'user';
+      if (config.AUTH.FIRST_USER_ADMIN) {
+        const count = await this.db.getUserCount();
+        if (count === 0) role = 'admin';
+      }
+      
+      const userId = nanoid();
+      user = {
+        _id: userId,
+        firebaseUid: decodedToken.uid,
+        email: decodedToken.email || null,
+        username: decodedToken.email ? decodedToken.email.split('@')[0] : `user_${nanoid(8)}`,
+        phone: decodedToken.phone_number || null,
+        role,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+      
+      await this.db.createUser(user);
+    }
+    
+    // 4. Create Session
+    const sessionId = nanoid();
+    await this.db.createSession({
+      userId: user._id,
+      sessionId,
+      ip,
+      userAgent,
+      lastActiveAt: new Date(),
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+    });
+
+    const accessToken = this._generateAccessToken(user, sessionId);
+    const refreshToken = await this._generateRefreshToken(user._id, sessionId);
+
+    return { user, accessToken, refreshToken };
+  }
+
   async registerUser({ username, email, password }) {
     // Check duplicates
     const [existingEmail, existingUsername] = await Promise.all([

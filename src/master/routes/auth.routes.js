@@ -8,6 +8,7 @@ const router = express.Router();
 
 router.post('/register', asyncWrapper(authController.register.bind(authController)));
 router.post('/login', asyncWrapper(authController.login.bind(authController)));
+router.post('/sync', asyncWrapper(authController.syncWithFirebase.bind(authController)));
 router.post('/verify-2fa', asyncWrapper(authController.verify2FALogin.bind(authController)));
 
 router.post('/refresh', asyncWrapper(authController.refresh.bind(authController)));

@@ -31,6 +31,10 @@ class MongoMetadataRepo extends IMetadataRepository {
     return await User.findOne({ username }).lean();
   }
   
+  async findUserByFirebaseUid(uid) {
+    return await User.findOne({ firebaseUid: uid }).lean();
+  }
+  
   async updateUser(userId, updateData) {
     return await User.findByIdAndUpdate(userId, updateData, { new: true }).lean();
   }

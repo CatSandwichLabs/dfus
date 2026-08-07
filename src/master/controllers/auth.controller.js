@@ -26,6 +26,17 @@ class AuthController {
     res.status(201).json({ user, accessToken });
   }
 
+  async syncWithFirebase(req, res) {
+    const { idToken, recaptchaToken } = req.body;
+    const ip = req.ip;
+    const userAgent = req.get('User-Agent') || 'Unknown';
+    
+    const { user, accessToken, refreshToken } = await authService.syncFirebaseUser(idToken, recaptchaToken, ip, userAgent);
+    
+    setRefreshTokenCookie(res, refreshToken);
+    res.status(200).json({ user, token: accessToken });
+  }
+
   async login(req, res) {
     const { email, password } = req.body;
     const ip = req.ip;
