@@ -86,7 +86,13 @@ const config = {
   },
 
   CORS: {
-    ALLOWED_ORIGINS: parseArray(env.CORS_ORIGINS, ['http://localhost:3000', 'http://127.0.0.1:3000', 'http://localhost:5500', 'http://127.0.0.1:5500']),
+    ALLOWED_ORIGINS: parseArray(env.CORS_ORIGINS, [
+      'http://localhost:3000', 'http://127.0.0.1:3000',
+      'http://localhost:5500', 'http://127.0.0.1:5500',
+      'http://localhost:5173', 'http://127.0.0.1:5173',
+      'https://dfus.pages.dev',
+      'https://dfu-system.vercel.app'
+    ]),
     CREDENTIALS: true
   },
 
