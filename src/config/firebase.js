@@ -10,7 +10,7 @@ const logger = createLogger('firebase-admin');
 try {
   if (!admin.apps.length) {
     admin.initializeApp({
-      projectId: config.FIREBASE.PROJECT_ID || 'demo-dfus-project'
+      projectId: config.FIREBASE.PROJECT_ID || 'dfs-system-3d4ba'
     });
     logger.info('Firebase Admin SDK initialized successfully');
   }
