@@ -1,0 +1,108 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:6
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - dfus-net
+
+  master:
+    build:
+      context: .
+      dockerfile: Dockerfile.master
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - MONGODB_URI=mongodb://mongodb:27017/dfus
+      - JWT_SECRET=super_secret_jwt_key
+      - REFRESH_TOKEN_SECRET=super_secret_refresh_key
+      - WORKER_SECRET=shared_secret_between_master_and_worker
+      - R2_ACCOUNT_ID=${R2_ACCOUNT_ID}
+      - R2_ACCESS_KEY_ID=${R2_ACCESS_KEY_ID}
+      - R2_SECRET_ACCESS_KEY=${R2_SECRET_ACCESS_KEY}
+      - R2_BUCKET_NAME=${R2_BUCKET_NAME}
+    depends_on:
+      - mongodb
+    networks:
+      - dfus-net
+
+  worker-1:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    ports:
+      - "4001:4001"
+    environment:
+      - NODE_ENV=production
+      - PORT=4001
+      - WORKER_ID=worker-1
+      - MASTER_URL=http://master:3000
+      - WORKER_SECRET=shared_secret_between_master_and_worker
+      - PUBLIC_URL=http://localhost:4001
+      - STORAGE_TYPE=local
+      - LOCAL_STORAGE_DIR=/app/data
+    volumes:
+      - worker1_data:/app/data
+    depends_on:
+      - master
+    networks:
+      - dfus-net
+
+  worker-2:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    ports:
+      - "4002:4002"
+    environment:
+      - NODE_ENV=production
+      - PORT=4002
+      - WORKER_ID=worker-2
+      - MASTER_URL=http://master:3000
+      - WORKER_SECRET=shared_secret_between_master_and_worker
+      - PUBLIC_URL=http://localhost:4002
+      - STORAGE_TYPE=local
+      - LOCAL_STORAGE_DIR=/app/data
+    volumes:
+      - worker2_data:/app/data
+    depends_on:
+      - master
+    networks:
+      - dfus-net
+
+  worker-3:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    ports:
+      - "4003:4003"
+    environment:
+      - NODE_ENV=production
+      - PORT=4003
+      - WORKER_ID=worker-3
+      - MASTER_URL=http://master:3000
+      - WORKER_SECRET=shared_secret_between_master_and_worker
+      - PUBLIC_URL=http://localhost:4003
+      - STORAGE_TYPE=local
+      - LOCAL_STORAGE_DIR=/app/data
+    volumes:
+      - worker3_data:/app/data
+    depends_on:
+      - master
+    networks:
+      - dfus-net
+
+networks:
+  dfus-net:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  worker1_data:
+  worker2_data:
+  worker3_data:

@@ -1,7 +1,11 @@
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
+const promClient = require('prom-client');
 const { createLogger, createHttpLogger } = require('../utils/logger');
+
+// Initialize default prometheus metrics
+promClient.collectDefaultMetrics();
 const config = require('../config/env');
 const chunkRoutes = require('./routes/chunk.routes');
 const errorHandler = require('../middleware/errorHandler');
@@ -25,6 +29,11 @@ app.use('/chunks', chunkRoutes);
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', workerId: config.WORKER.ID });
+});
+
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', promClient.register.contentType);
+  res.send(await promClient.register.metrics());
 });
 
 app.use(errorHandler);

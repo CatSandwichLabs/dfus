@@ -2,6 +2,10 @@ const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
 const path = require('path');
+const promClient = require('prom-client');
+
+// Initialize default prometheus metrics
+promClient.collectDefaultMetrics();
 const config = require('../config/env');
 const { createLogger, createHttpLogger } = require('../utils/logger');
 const errorHandler = require('../middleware/errorHandler');
@@ -62,6 +66,11 @@ app.use('/api/v1/trash', trashRoutes);
 app.use('/api/v1/shares', shareRoutes);
 app.use('/api/v1/system/workers', workerRoutes);
 app.use('/api/v1/admin', adminRoutes);
+
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', promClient.register.contentType);
+  res.send(await promClient.register.metrics());
+});
 
 // 404 Catch-All Route (Must be before errorHandler)
 app.use((req, res, next) => {
