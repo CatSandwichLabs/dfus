@@ -4,8 +4,10 @@ const cors = require('cors');
 const path = require('path');
 const promClient = require('prom-client');
 
-// Initialize default prometheus metrics
-promClient.collectDefaultMetrics();
+// Initialize default prometheus metrics (skip on Vercel where process metrics are meaningless and cause double-registration crashes)
+if (process.env.VERCEL !== '1') {
+  promClient.collectDefaultMetrics();
+}
 const config = require('../config/env');
 const { createLogger, createHttpLogger } = require('../utils/logger');
 const errorHandler = require('../middleware/errorHandler');
