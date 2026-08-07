@@ -83,7 +83,7 @@ class AuthService {
         }
       }
     } catch (error) {
-      throw new AuthenticationError('Invalid Firebase ID Token');
+      throw new AuthenticationError(`Invalid Firebase ID Token: ${error.message}`);
     }
 
     // 3. Sync User in MongoDB
