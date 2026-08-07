@@ -1,558 +1,85 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="DFUS - Distributed Resumable File Upload System. Production-grade chunked uploads with SHA-256 integrity verification and parallel concurrency." />
-  <title>DFUS - Distributed File Upload System</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600&family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="styles.css" />
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DFUS - Secure Login</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+    
+    <!-- FirebaseUI -->
+    <script src="https://www.gstatic.com/firebasejs/ui/6.1.0/firebase-ui-auth.js"></script>
+    <link type="text/css" rel="stylesheet" href="https://www.gstatic.com/firebasejs/ui/6.1.0/firebase-ui-auth.css" />
 </head>
 <body>
-  <div class="app-shell">
-
-    <!-- ================================================================ -->
-    <!-- Header                                                           -->
-    <!-- ================================================================ -->
-    <header class="app-header" role="banner">
-      <div class="header-brand">
-        <div class="brand-mark" aria-hidden="true">
-          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect width="32" height="32" rx="8" fill="#1a3a6e"/>
-            <path d="M16 6 L26 12 L26 20 L16 26 L6 20 L6 12 Z" stroke="#4f9cf9" stroke-width="1.5" fill="none"/>
-            <path d="M16 10 L22 13.5 L22 20.5 L16 24 L10 20.5 L10 13.5 Z" fill="#4f9cf9" fill-opacity="0.15"/>
-            <line x1="16" y1="6" x2="16" y2="26" stroke="#4f9cf9" stroke-width="1" stroke-opacity="0.5"/>
-            <circle cx="16" cy="16" r="3" fill="#4f9cf9"/>
-          </svg>
-        </div>
-        <div class="brand-text">
-          <h1 class="brand-name">DFUS</h1>
-          <span class="brand-tagline">Distributed Resumable File Upload System</span>
-          <div class="developer-credit" style="font-family: 'Caveat', cursive; font-size: 1.2rem; color: var(--primary); letter-spacing: 1px; margin-top: 4px; font-weight: 600; text-shadow: 0 0 12px var(--primary-glow); animation: status-pulse 3s infinite ease-in-out;">
-            Developed By Aviral Bajpai
-          </div>
-        </div>
-      </div>
-      <div class="header-meta">
-        <div id="server-status" class="server-status" role="status" aria-live="polite">
-          <span class="status-dot" id="status-dot"></span>
-          <span class="status-label" id="status-label">Connecting...</span>
-        </div>
-        <div class="header-config" style="display: flex; gap: 12px; align-items: center;">
-          <a href="inbox.html" style="color: var(--primary); text-decoration: none; font-size: 0.85rem; font-weight: 500;">Go to Inbox</a>
-          <a href="changelog.html" style="color: var(--text-secondary); text-decoration: none; font-size: 0.85rem; font-weight: 500;">Changelog</a>
-          <select id="theme-switcher" class="input-field" style="padding: 2px 8px; font-size: 0.75rem; width: auto; background: var(--bg-surface); border: 1px solid var(--border);">
-            <option value="default">Midnight Blue</option>
-            <option value="hacker">Hacker Green</option>
-            <option value="cyberpunk">Cyberpunk Pink</option>
-            <option value="crimson">Crimson Red</option>
-          </select>
-          <span class="config-badge version-badge" onclick="window.location.href='changelog.html'" title="View Changelog" style="cursor: pointer;">v1.2.3</span>
-          <span class="config-badge" title="Chunk size">5 MB chunks</span>
-          <span class="config-badge" title="Max parallel uploads">4x parallel</span>
-        </div>
-      </div>
-    </header>
-    
-    <script>
-      document.getElementById('theme-switcher').addEventListener('change', (e) => {
-        document.documentElement.setAttribute('data-theme', e.target.value);
-        localStorage.setItem('dfus_theme', e.target.value);
-      });
-      const savedTheme = localStorage.getItem('dfus_theme');
-      if (savedTheme) {
-        document.documentElement.setAttribute('data-theme', savedTheme);
-        document.getElementById('theme-switcher').value = savedTheme;
-      }
-    </script>
-
-    <!-- ================================================================ -->
-    <!-- Main Content                                                      -->
-    <!-- ================================================================ -->
-    <main class="main-content" role="main">
-
-      <!-- Drop Zone Panel -->
-      <section class="panel drop-panel" aria-labelledby="drop-panel-heading">
-        <h2 id="drop-panel-heading" class="panel-title">File Selection</h2>
-
-        <div id="drop-zone" class="drop-zone" role="button" tabindex="0"
-             aria-label="Drop a file here or click to browse"
-             aria-describedby="drop-zone-hint">
-          <div class="drop-zone-content">
-            <div class="drop-icon" aria-hidden="true">
-              <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M24 8 L24 32" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-                <path d="M14 22 L24 32 L34 22" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-                <path d="M8 36 L8 40 L40 40 L40 36" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
+    <div class="auth-wrapper">
+        <div class="auth-box">
+            <div class="auth-header">
+                <h2>System Access</h2>
+                <p>Distributed File Upload System</p>
             </div>
-            <p class="drop-primary">Drop file/folder here or <span class="drop-link" id="click-file">click to browse</span></p>
-            <p class="drop-secondary" id="drop-zone-hint">Tip: Select multiple files or drag a folder. Maximum efficiency, zero RAM limits.</p>
-            <div class="folder-upload-action" style="margin-top: 16px;">
-              <button id="btn-browse-folder" class="btn btn-secondary btn-small">Or upload a Folder</button>
+            
+            <div id="firebase-message" class="error-message" style="margin-bottom: 1rem;">
+                <!-- Configure Firebase Below -->
             </div>
-          </div>
-          <input type="file" id="file-input" class="visually-hidden" aria-hidden="true" tabindex="-1" multiple />
-          <input type="file" id="folder-input" class="visually-hidden" aria-hidden="true" tabindex="-1" webkitdirectory directory />
+
+            <!-- FirebaseUI Auth Container -->
+            <div id="firebaseui-auth-container"></div>
+            
         </div>
-
-        <!-- File Info (shown after selection) -->
-        <div id="file-info" class="file-info hidden" role="region" aria-label="Selected file information">
-          <div class="file-info-grid">
-            <div class="info-item">
-              <span class="info-label">File name</span>
-              <span class="info-value mono" id="info-filename">-</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">Size</span>
-              <span class="info-value mono" id="info-filesize">-</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">Total chunks</span>
-              <span class="info-value mono" id="info-chunks">-</span>
-            </div>
-            <div class="info-item">
-              <span class="info-label">SHA-256</span>
-              <span class="info-value mono hash-value" id="info-hash">Computing...</span>
-            </div>
-          </div>
-
-          <!-- Hash computation progress -->
-          <div id="hash-progress-container" class="progress-container" role="progressbar" aria-label="SHA-256 computation progress">
-            <div class="progress-label">
-              <span>Computing SHA-256</span>
-              <span id="hash-progress-pct" class="mono">0%</span>
-            </div>
-            <div class="progress-track">
-              <div id="hash-progress-bar" class="progress-fill progress-fill-hash"></div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Advanced Options Accordions -->
-        <div id="processing-options" class="hidden" style="margin-top: 24px; display: flex; flex-direction: column; gap: 12px;">
-          
-          <details class="accordion" open>
-            <summary class="accordion-summary">Media Processing & Network Rules</summary>
-            <div class="accordion-content">
-              <div style="display: flex; flex-direction: column; gap: 16px;">
-                
-                <!-- Compression -->
-                <div style="display: flex; align-items: center; justify-content: space-between;">
-                  <div>
-                    <label for="opt-compress" style="font-size: 0.9rem;">Compress Image/PDF</label>
-                    <p class="drop-secondary" style="font-size: 12px; margin: 0;">Shrink file before upload.</p>
-                  </div>
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <input type="number" id="opt-compress-size" class="input-field hidden" placeholder="Target KB" style="width: 100px; padding: 4px;" />
-                    <label class="toggle-switch">
-                      <input type="checkbox" id="opt-compress" onchange="const el = document.getElementById('opt-compress-size'); if(this.checked){el.classList.remove('hidden')}else{el.classList.add('hidden')}">
-                      <span class="slider round"></span>
-                    </label>
-                  </div>
-                </div>
-
-                <!-- AI Background Removal -->
-                <div style="display: flex; align-items: center; justify-content: space-between;">
-                  <div>
-                    <label for="opt-rmbg" style="font-size: 0.9rem;">Remove Background (AI)</label>
-                    <p class="drop-secondary" style="font-size: 12px; margin: 0;">For images only. Runs locally.</p>
-                  </div>
-                  <label class="toggle-switch">
-                    <input type="checkbox" id="opt-rmbg">
-                    <span class="slider round"></span>
-                  </label>
-                </div>
-
-                <!-- Video Transcoding -->
-                <div style="display: flex; align-items: center; justify-content: space-between;">
-                  <div>
-                    <label for="opt-transcode" style="font-size: 0.9rem;">Transcode Video (H.264)</label>
-                    <p class="drop-secondary" style="font-size: 12px; margin: 0;">Convert heavy .mov/.mkv to .mp4.</p>
-                  </div>
-                  <label class="toggle-switch">
-                    <input type="checkbox" id="opt-transcode">
-                    <span class="slider round"></span>
-                  </label>
-                </div>
-
-                <!-- Visual Watermarking -->
-                <div style="display: flex; align-items: center; justify-content: space-between;">
-                  <div>
-                    <label for="process-watermark" style="font-size: 0.9rem;">Visual Watermarking</label>
-                    <p class="drop-secondary" style="font-size: 12px; margin: 0;">Apply watermark to Images/PDFs.</p>
-                  </div>
-                  <label class="toggle-switch">
-                    <input type="checkbox" id="process-watermark">
-                    <span class="slider round"></span>
-                  </label>
-                </div>
-
-                <!-- Audio Transcription -->
-                <div style="display: flex; align-items: center; justify-content: space-between;">
-                  <div>
-                    <label for="process-transcribe" style="font-size: 0.9rem;">Audio Transcription</label>
-                    <p class="drop-secondary" style="font-size: 12px; margin: 0;">Transcribe audio locally (WASM).</p>
-                  </div>
-                  <label class="toggle-switch">
-                    <input type="checkbox" id="process-transcribe">
-                    <span class="slider round"></span>
-                  </label>
-                </div>
-                
-                <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.05); margin: 4px 0;" />
-
-                <!-- IPFS Pinning -->
-                <div style="display: flex; align-items: center; justify-content: space-between;">
-                  <div>
-                    <label for="opt-ipfs" style="font-size: 0.9rem; color: #a855f7;">IPFS Web3 Pinning</label>
-                    <p class="drop-secondary" style="font-size: 12px; margin: 0;">Mirror to the decentralized IPFS network.</p>
-                  </div>
-                  <label class="toggle-switch">
-                    <input type="checkbox" id="opt-ipfs">
-                    <span class="slider round"></span>
-                  </label>
-                </div>
-
-                <!-- WebRTC P2P -->
-                <div style="display: flex; align-items: center; justify-content: space-between;">
-                  <div>
-                    <label for="opt-webrtc" style="font-size: 0.9rem; color: #3b82f6;">WebRTC Direct P2P</label>
-                    <p class="drop-secondary" style="font-size: 12px; margin: 0;">Bypass server. Send directly to peer (requires both online).</p>
-                  </div>
-                  <label class="toggle-switch">
-                    <input type="checkbox" id="opt-webrtc">
-                    <span class="slider round"></span>
-                  </label>
-                </div>
-
-                <!-- Bandwidth QoS -->
-                <div style="display: flex; align-items: center; justify-content: space-between;">
-                  <div style="flex: 1; padding-right: 16px;">
-                    <label for="opt-qos" style="font-size: 0.9rem; color: #f59e0b;">Bandwidth Throttling (QoS)</label>
-                    <p class="drop-secondary" style="font-size: 12px; margin: 0;">Limit maximum upload speed.</p>
-                  </div>
-                  <div style="display: flex; align-items: center; gap: 8px;">
-                    <span class="mono small" id="qos-label">Unlimited</span>
-                    <input type="range" id="opt-qos" min="0" max="100" value="0" style="width: 100px;">
-                  </div>
-                </div>
-                <script>
-                  document.getElementById('opt-qos').addEventListener('input', (e) => {
-                    const val = parseInt(e.target.value, 10);
-                    document.getElementById('qos-label').textContent = val === 0 ? 'Unlimited' : `${val} MB/s`;
-                  });
-                </script>
-              </div>
-            </div>
-          </details>
-          
-          <details class="accordion">
-            <summary class="accordion-summary" style="color: #4ade80;">Security & Access Controls</summary>
-            <div class="accordion-content">
-              <div style="display: flex; flex-direction: column; gap: 16px;">
-                <!-- E2EE -->
-                <div style="display: flex; align-items: center; justify-content: space-between;">
-                  <div>
-                    <label for="opt-e2ee" style="font-size: 0.9rem; color: #4ade80;">End-to-End Encryption</label>
-                    <p class="drop-secondary" style="font-size: 12px; margin: 0;">Zero-knowledge AES-256-GCM encryption.</p>
-                  </div>
-                  <label class="toggle-switch">
-                    <input type="checkbox" id="opt-e2ee">
-                    <span class="slider round"></span>
-                  </label>
-                </div>
-                
-                <div class="password-protect-container">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <label for="upload-password" class="info-label" style="margin-bottom: 0;">Password Protection</label>
-                    <button id="btn-generate-password" class="btn-text small" style="color: #4ade80;">Auto-Generate</button>
-                  </div>
-                  <input type="password" id="upload-password" class="input-field" placeholder="Enter password (optional)" />
-                </div>
-                
-                <div class="inbox-target-container">
-                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <label for="upload-target-inbox" class="info-label" style="margin-bottom: 0;">Send to Inbox (Optional)</label>
-                  </div>
-                  <input type="text" id="upload-target-inbox" class="input-field" placeholder="e.g. user@dfus.com" autocomplete="off" />
-                  <p id="inbox-status" style="font-size: 0.75rem; margin-top: 4px; display: none;"></p>
-                </div>
-                
-                <div class="self-destruct-container" style="display: flex; align-items: center; justify-content: space-between;">
-                  <div>
-                    <label for="upload-self-destruct" class="info-label" style="margin-bottom: 4px; color: #f87171;">Burn After Reading</label>
-                    <p class="drop-secondary" style="font-size: 12px; margin: 0;">File automatically deletes after the first download.</p>
-                  </div>
-                  <label class="toggle-switch">
-                    <input type="checkbox" id="upload-self-destruct">
-                    <span class="slider round"></span>
-                  </label>
-                </div>
-                
-                <div>
-                  <div style="margin-bottom: 8px; font-size: 0.8rem; color: var(--text-secondary);">
-                    Geoblocking (Allow Only Specific Location)
-                  </div>
-                  <div style="position: relative;">
-                    <input type="text" id="upload-geoblock-search" class="input-field" placeholder="e.g. New Delhi" style="padding: 8px; font-size: 0.9rem; width: 100%;" autocomplete="off" />
-                    <div id="geoblock-autocomplete" class="autocomplete-dropdown hidden"></div>
-                    <input type="hidden" id="upload-geoblock-city" value="" />
-                  </div>
-                </div>
-                
-                <div style="display: flex; gap: 8px;">
-                  <div style="flex: 1;">
-                    <div style="margin-bottom: 4px; font-size: 0.8rem; color: var(--text-secondary);">Max Downloads</div>
-                    <input type="number" id="upload-max-downloads" class="input-field" placeholder="Unlimited" min="1" style="padding: 6px; font-size: 0.8rem; width: 100%;" />
-                  </div>
-                  <div style="flex: 1;">
-                    <div style="margin-bottom: 4px; font-size: 0.8rem; color: var(--text-secondary);">Expires In</div>
-                    <select id="upload-expiration" class="input-field" style="padding: 6px; font-size: 0.8rem; width: 100%;">
-                      <option value="never">Never</option>
-                      <option value="1h">1 Hour</option>
-                      <option value="24h">24 Hours</option>
-                      <option value="7d">7 Days</option>
-                    </select>
-                  </div>
-                </div>
-                
-                <div>
-                  <div style="margin-bottom: 4px; font-size: 0.8rem; color: var(--text-secondary);">
-                    Download Webhook URL (Optional)
-                  </div>
-                  <input type="url" id="upload-webhook" class="input-field" placeholder="https://your-server.com/webhook" style="padding: 6px; font-size: 0.8rem; width: 100%;" />
-                </div>
-                
-              </div>
-            </div>
-          </details>
-        </div>
-        
-        <!-- Upload Controls -->
-        <div id="upload-controls" class="upload-controls hidden">  <button id="btn-start" class="btn btn-primary" disabled>
-            <span class="btn-icon" aria-hidden="true">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M3 2.5l10 5.5-10 5.5V2.5z"/>
-              </svg>
-            </span>
-            Start Upload
-          </button>
-          <button id="btn-resume" class="btn btn-secondary" disabled>
-            <span class="btn-icon" aria-hidden="true">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M2 2h3v12H2V2zm9 0l5 6-5 6V2z"/>
-              </svg>
-            </span>
-            Resume Upload
-          </button>
-          <button id="btn-pause" class="btn btn-ghost hidden">
-            <span class="btn-icon" aria-hidden="true">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M2 2h4v12H2V2zm8 0h4v12h-4V2z"/>
-              </svg>
-            </span>
-            Pause
-          </button>
-          <button id="btn-reset" class="btn btn-danger-ghost hidden">
-            Reset
-          </button>
-        </div>
-      </section>
-
-      <!-- Metrics Panel -->
-      <section id="metrics-panel" class="panel metrics-panel hidden" aria-label="Upload metrics">
-        <div class="metrics-grid">
-          <div class="metric-card">
-            <div class="metric-label">Progress</div>
-            <div class="metric-value mono" id="metric-progress">0%</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">Speed</div>
-            <div class="metric-value mono" id="metric-speed">- MB/s</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">Uploaded</div>
-            <div class="metric-value mono" id="metric-uploaded">0 / 0</div>
-          </div>
-          <div class="metric-card">
-            <div class="metric-label">Time Left</div>
-            <div class="metric-value mono" id="metric-eta">--:--</div>
-          </div>
-          <div class="metric-card" style="grid-column: span 2;">
-            <div class="metric-label">Status</div>
-            <div class="metric-value" id="metric-status">
-              <span class="status-badge" id="status-badge">IDLE</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Overall Upload Progress Bar -->
-        <div class="progress-container overall-progress" role="progressbar"
-             aria-label="Overall upload progress" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"
-             id="overall-progress-bar-container">
-          <div class="progress-track">
-            <div id="overall-progress-bar" class="progress-fill progress-fill-primary"></div>
-          </div>
-        </div>
-
-        <!-- Network Telemetry Graph -->
-        <div class="telemetry-panel" style="margin-top: 24px;">
-          <h3 class="panel-title" style="font-size: 14px; margin-bottom: 8px;">Network Telemetry (MB/s)</h3>
-          <div style="height: 120px; width: 100%; position: relative;">
-            <canvas id="speed-chart"></canvas>
-          </div>
-        </div>
-      </section>
-
-      <!-- Active Session File Management -->
-      <section id="session-dashboard" class="panel hidden" aria-labelledby="dashboard-heading">
-        <h2 id="dashboard-heading" class="panel-title">My Recent Uploads</h2>
-        <div class="table-responsive" style="margin-top: 16px;">
-          <table style="width: 100%; text-align: left; border-collapse: collapse;">
-            <thead>
-              <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
-                <th style="padding: 8px;">File Name</th>
-                <th style="padding: 8px;">Size</th>
-                <th style="padding: 8px;">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="dashboard-tbody">
-              <!-- Dynamically populated -->
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- Packet Matrix Section -->
-      <section id="matrix-section" class="panel matrix-panel hidden" aria-labelledby="matrix-heading">
-        <div class="matrix-header">
-          <h2 id="matrix-heading" class="panel-title">Packet Matrix</h2>
-          <div class="matrix-legend" role="list" aria-label="Packet state legend">
-            <div class="legend-item" role="listitem">
-              <span class="legend-swatch swatch-pending" aria-hidden="true"></span>
-              <span>Pending</span>
-            </div>
-            <div class="legend-item" role="listitem">
-              <span class="legend-swatch swatch-uploading" aria-hidden="true"></span>
-              <span>Uploading</span>
-            </div>
-            <div class="legend-item" role="listitem">
-              <span class="legend-swatch swatch-success" aria-hidden="true"></span>
-              <span>Success</span>
-            </div>
-            <div class="legend-item" role="listitem">
-              <span class="legend-swatch swatch-failed" aria-hidden="true"></span>
-              <span>Failed</span>
-            </div>
-          </div>
-        </div>
-        <div id="packet-matrix" class="packet-matrix" role="grid" aria-label="File chunk upload status grid"></div>
-        <div class="matrix-footer">
-          <span class="mono small" id="matrix-summary">0 pending / 0 uploading / 0 success / 0 failed</span>
-        </div>
-      </section>
-
-      <!-- Activity Log -->
-      <section class="panel log-panel" aria-labelledby="log-heading">
-        <div class="log-header">
-          <h2 id="log-heading" class="panel-title">Activity Log</h2>
-          <button id="btn-clear-log" class="btn-text" aria-label="Clear activity log">Clear</button>
-        </div>
-        <div id="activity-log" class="activity-log" role="log" aria-live="polite" aria-relevant="additions"></div>
-      </section>
-
-      <!-- Analytics Dashboard -->
-      <section class="panel analytics-panel" aria-labelledby="analytics-heading" style="margin-top: 16px;">
-        <div class="log-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-          <h2 id="analytics-heading" class="panel-title" style="color: #a855f7;">Transfer Analytics & History</h2>
-          <div>
-            <button id="btn-export-pdf" class="btn btn-secondary btn-sm" onclick="exportAnalyticsPDF()">Export PDF</button>
-            <button id="btn-clear-history" class="btn-text btn-sm" onclick="clearAnalyticsHistory()">Clear</button>
-          </div>
-        </div>
-        <div style="background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
-          <table style="width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem;">
-            <thead>
-              <tr style="background: var(--bg-surface); border-bottom: 1px solid var(--border);">
-                <th style="padding: 12px; font-weight: 500; color: var(--text-secondary);">Date</th>
-                <th style="padding: 12px; font-weight: 500; color: var(--text-secondary);">File Name</th>
-                <th style="padding: 12px; font-weight: 500; color: var(--text-secondary);">Size</th>
-                <th style="padding: 12px; font-weight: 500; color: var(--text-secondary);">Link</th>
-              </tr>
-            </thead>
-            <tbody id="analytics-table-body">
-              <tr><td colspan="4" style="padding: 16px; text-align: center; color: var(--text-dim);">No history available yet.</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-    </main>
-    
-    <!-- Share Modal -->
-    <div id="share-modal" class="modal hidden">
-      <div class="modal-content">
-        <h2 class="panel-title" style="color: #4ade80;">Upload Complete!</h2>
-        <p class="drop-secondary" style="margin-bottom: 16px;">Your file has been securely merged and stored.</p>
-        <div class="share-link-container">
-          <span class="info-label">Secure Global Download Link:</span>
-          <div style="display: flex; gap: 8px; margin-top: 8px;">
-            <input type="text" id="share-url" class="input-field mono" readonly style="flex: 1; padding: 8px;" />
-            <button id="btn-copy-link" class="btn btn-secondary">Copy</button>
-          </div>
-        </div>
-        <div class="share-link-container" id="cloud-link-container" style="margin-top: 16px; display: none;">
-          <span class="info-label">Gofile.io Cloud Link (Permanent):</span>
-          <div style="display: flex; gap: 8px; margin-top: 8px;">
-            <input type="text" id="cloud-url" class="input-field mono" readonly style="flex: 1; padding: 8px;" />
-            <button id="btn-copy-cloud" class="btn btn-secondary">Copy</button>
-          </div>
-        </div>
-        <div style="margin-top: 24px; display: flex; justify-content: center;">
-          <div id="qrcode" style="background: white; padding: 16px; border-radius: 8px; display: none;"></div>
-        </div>
-        <div style="margin-top: 24px; text-align: right;">
-          <button id="btn-close-modal" class="btn btn-primary">Done</button>
-        </div>
-      </div>
     </div>
-    <!-- Global Footer -->
-    <footer class="app-footer">
-      <div class="footer-content">
-        <span>&copy; 2026 DFUS. Developed with ❤️ by Cat Sandwich Studios.</span>
-        <div class="footer-links">
-          <a href="terms.html">Terms of Service</a>
-          <a href="privacy.html">Privacy Policy</a>
-        </div>
-      </div>
-    </footer>
-  </div>
 
-  <!-- External Libraries for Advanced Features -->
-  <!-- browser-image-compression for fast image shrinking -->
-  <script src="https://cdn.jsdelivr.net/npm/browser-image-compression@2.0.2/dist/browser-image-compression.js"></script>
-  <!-- Background Removal AI -->
-  <script src="https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.4.3/dist/browser/index.js"></script>
-  <!-- FFmpeg.wasm for Video Transcoding -->
-  <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
-  <!-- PeerJS for WebRTC P2P -->
-  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
-  <!-- IPFS HTTP Client for Decentralized Pinning -->
-  <script src="https://cdn.jsdelivr.net/npm/ipfs-http-client@60.0.1/dist/index.min.js"></script>
-  
-  <script src="config.js?v=1.2.2"></script>
-  <script src="e2ee.js"></script>
-  <script src="webrtc.js"></script>
-  <script src="ipfs.js"></script>
-  <script src="theme.js?v=1.2.2"></script>
-  <script src="app.js?v=1.2.2"></script>
+    <script src="js/api.js"></script>
+    <script>
+        // REPLACE WITH YOUR FIREBASE CONFIG
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID"
+        };
+        
+        try {
+            firebase.initializeApp(firebaseConfig);
+            
+            const ui = new firebaseui.auth.AuthUI(firebase.auth());
+            
+            const uiConfig = {
+                callbacks: {
+                    signInSuccessWithAuthResult: function(authResult, redirectUrl) {
+                        // Firebase handles the tokens.
+                        // We extract the ID token and send it to our backend to get our user object.
+                        authResult.user.getIdToken().then(token => {
+                            // Save token to localStorage for api.js to use
+                            localStorage.setItem('dfus_token', token);
+                            
+                            // Hit backend /me to provision user
+                            api.get('/auth/me').then(res => {
+                                localStorage.setItem('dfus_user', JSON.stringify(res.user));
+                                window.location.href = 'dashboard.html';
+                            }).catch(err => {
+                                document.getElementById('firebase-message').innerText = "Backend provisioning failed: " + err.message;
+                            });
+                        });
+                        return false; // Prevent auto-redirect
+                    }
+                },
+                signInFlow: 'popup',
+                signInOptions: [
+                    firebase.auth.EmailAuthProvider.PROVIDER_ID,
+                    firebase.auth.GoogleAuthProvider.PROVIDER_ID
+                ]
+            };
+            
+            ui.start('#firebaseui-auth-container', uiConfig);
+            
+        } catch (err) {
+            document.getElementById('firebase-message').innerText = "Please update firebaseConfig in index.html with your Firebase credentials.";
+            document.getElementById('firebaseui-auth-container').style.display = 'none';
+        }
+    </script>
 </body>
 </html>

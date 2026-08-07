@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DFUS - Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div>
+                <h2>DFUS Dashboard</h2>
+                <p id="user-info">Loading user...</p>
+            </div>
+            <button id="logout-btn" class="btn secondary" style="width: auto;">Logout</button>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="storage-used">0 MB</div>
+                <div class="stat-label">Storage Used</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="file-count">0</div>
+                <div class="stat-label">Files Uploaded</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="cluster-status">Online</div>
+                <div class="stat-label">Cluster Status</div>
+            </div>
+        </div>
+
+        <div id="dropzone" class="dropzone">
+            <h3>Drag & Drop Files Here</h3>
+            <p>or click to select a file</p>
+            <input type="file" id="file-input" class="hidden">
+        </div>
+        
+        <div id="upload-progress" class="hidden" style="margin-bottom: 2rem;">
+            <p id="upload-status" style="margin-bottom: 0.5rem; color: var(--text-primary);">Uploading...</p>
+            <div style="width: 100%; height: 4px; background: var(--border-color);">
+                <div id="progress-bar" style="width: 0%; height: 100%; background: var(--text-primary); transition: width 0.2s;"></div>
+            </div>
+        </div>
+
+        <h3>Your Files</h3>
+        <div id="file-list" class="file-list" style="margin-top: 1rem;">
+            <!-- Files injected here -->
+        </div>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script>
+        // Init Firebase for auth state
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID"
+        };
+        try { firebase.initializeApp(firebaseConfig); } catch(e) {}
+
+        const userString = localStorage.getItem('dfus_user');
+        if (!userString) {
+            window.location.href = 'index.html';
+        }
+        
+        const user = JSON.parse(userString);
+        document.getElementById('user-info').innerText = `${user.email} | ${user.role.toUpperCase()}`;
+
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            api.logout();
+        });
+
+        // Load files
+        async function loadFiles() {
+            try {
+                const data = await api.get('/files');
+                const list = document.getElementById('file-list');
+                list.innerHTML = '';
+                
+                if (data.files.length === 0) {
+                    list.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">No files uploaded yet.</div>';
+                }
+
+                let totalStorage = 0;
+                
+                data.files.forEach(f => {
+                    totalStorage += f.size;
+                    const sizeMB = (f.size / (1024 * 1024)).toFixed(2);
+                    const div = document.createElement('div');
+                    div.className = 'file-item';
+                    div.innerHTML = `
+                        <div class="file-info">
+                            <h4>${f.originalName}</h4>
+                            <div class="file-meta">${sizeMB} MB • ${new Date(f.uploadedAt).toLocaleDateString()}</div>
+                        </div>
+                        <div class="file-actions">
+                            <button class="btn btn-secondary btn-small" onclick="downloadFile('${f.id}')">Download</button>
+                            <button class="btn btn-small" style="background: var(--error-color); border-color: var(--error-color)" onclick="deleteFile('${f.id}')">Delete</button>
+                        </div>
+                    `;
+                    list.appendChild(div);
+                });
+
+                document.getElementById('file-count').innerText = data.files.length;
+                document.getElementById('storage-used').innerText = (totalStorage / (1024 * 1024)).toFixed(2) + ' MB';
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function downloadFile(id) {
+            window.open(`${API_BASE}/api/files/${id}/download?token=${localStorage.getItem('dfus_token')}`, '_blank');
+        }
+
+        async function deleteFile(id) {
+            if(confirm('Delete file?')) {
+                await api.delete(`/files/${id}`);
+                loadFiles();
+            }
+        }
+
+        // Upload Logic
+        const dropzone = document.getElementById('dropzone');
+        const fileInput = document.getElementById('file-input');
+
+        dropzone.addEventListener('click', () => fileInput.click());
+        dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+        dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+        dropzone.addEventListener('drop', e => {
+            e.preventDefault();
+            dropzone.classList.remove('dragover');
+            if (e.dataTransfer.files.length) handleUpload(e.dataTransfer.files[0]);
+        });
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length) handleUpload(fileInput.files[0]);
+        });
+
+        async function handleUpload(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            document.getElementById('upload-progress').classList.remove('hidden');
+            document.getElementById('progress-bar').style.width = '50%';
+            document.getElementById('upload-status').innerText = `Uploading ${file.name}...`;
+
+            try {
+                await api.postForm('/files/upload', formData);
+                document.getElementById('progress-bar').style.width = '100%';
+                document.getElementById('upload-status').innerText = 'Upload complete!';
+                setTimeout(() => {
+                    document.getElementById('upload-progress').classList.add('hidden');
+                    loadFiles();
+                }, 1000);
+            } catch (err) {
+                document.getElementById('upload-status').innerText = `Error: ${err.message}`;
+                document.getElementById('progress-bar').style.background = 'var(--error-color)';
+            }
+        }
+
+        loadFiles();
+    </script>
+</body>
+</html>
