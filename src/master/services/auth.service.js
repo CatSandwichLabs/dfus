@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { authenticator } = require('otplib');
+const speakeasy = require('speakeasy');
 const qrcode = require('qrcode');
 const { nanoid } = require('nanoid');
 const crypto = require('crypto');
@@ -219,8 +219,9 @@ class AuthService {
     if (!user) throw new NotFoundError('User not found');
     if (user.twoFactorEnabled) throw new ConflictError('2FA already enabled');
 
-    const secret = authenticator.generateSecret();
-    const otpauth = authenticator.keyuri(user.email, 'DFUS', secret);
+    const secretData = speakeasy.generateSecret({ name: `DFUS (${user.email})` });
+    const secret = secretData.base32;
+    const otpauth = secretData.otpauth_url;
     const qrCodeUrl = await qrcode.toDataURL(otpauth);
 
     // Save secret temporarily or send to client to verify before enabling
@@ -234,7 +235,7 @@ class AuthService {
     const user = await this.db.findUserById(userId);
     if (!user || !user.twoFactorSecret) throw new ValidationError('2FA setup not initiated');
 
-    const isValid = authenticator.verify({ token: code, secret: user.twoFactorSecret });
+    const isValid = speakeasy.totp.verify({ secret: user.twoFactorSecret, encoding: 'base32', token: code });
     if (!isValid) throw new AuthenticationError('Invalid 2FA code');
 
     // Generate backup codes
@@ -260,7 +261,7 @@ class AuthService {
       if (!user) throw new AuthenticationError('User not found');
 
       // Check TOTP
-      let isValid = authenticator.verify({ token: code, secret: user.twoFactorSecret });
+      let isValid = speakeasy.totp.verify({ secret: user.twoFactorSecret, encoding: 'base32', token: code });
       
       // If TOTP fails, check backup codes
       if (!isValid && user.backupCodes) {
@@ -292,7 +293,7 @@ class AuthService {
     const isValidPwd = await bcrypt.compare(password, user.passwordHash);
     if (!isValidPwd) throw new AuthenticationError('Invalid password');
 
-    const isValidCode = authenticator.verify({ token: code, secret: user.twoFactorSecret });
+    const isValidCode = speakeasy.totp.verify({ secret: user.twoFactorSecret, encoding: 'base32', token: code });
     if (!isValidCode) throw new AuthenticationError('Invalid 2FA code');
 
     await this.db.updateUser(userId, {
