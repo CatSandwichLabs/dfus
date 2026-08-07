@@ -6,9 +6,10 @@ const config = require('../config/env');
 
 const { combine, timestamp, printf, colorize, json, errors } = winston.format;
 
-// Ensure log directory exists on startup
+// Ensure log directory exists on startup (except on Vercel where FS is read-only)
+const isServerless = process.env.VERCEL === '1';
 const logsDir = path.join(__dirname, '../../data/logs');
-if (!fs.existsSync(logsDir)) {
+if (!isServerless && !fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir, { recursive: true });
 }
 
@@ -36,22 +37,27 @@ function createLogger(serviceName) {
         timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
         consoleFormat
       )
-    }),
-    new winston.transports.File({ 
-      filename: path.join(logsDir, `${serviceName}.log`),
-      format: combine(timestamp(), json())
-    }),
-    new winston.transports.File({ 
-      filename: path.join(logsDir, 'combined.log'),
-      level: 'info',
-      format: combine(timestamp(), json())
-    }),
-    new winston.transports.File({ 
-      filename: path.join(logsDir, 'error.log'),
-      level: 'error',
-      format: combine(timestamp(), json())
     })
   ];
+
+  if (!isServerless) {
+    transports.push(
+      new winston.transports.File({ 
+        filename: path.join(logsDir, `${serviceName}.log`),
+        format: combine(timestamp(), json())
+      }),
+      new winston.transports.File({ 
+        filename: path.join(logsDir, 'combined.log'),
+        level: 'info',
+        format: combine(timestamp(), json())
+      }),
+      new winston.transports.File({ 
+        filename: path.join(logsDir, 'error.log'),
+        level: 'error',
+        format: combine(timestamp(), json())
+      })
+    );
+  }
 
   return winston.createLogger({
     level: config.SYSTEM.LOG_LEVEL || 'info',
