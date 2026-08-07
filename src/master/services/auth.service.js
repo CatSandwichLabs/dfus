@@ -71,9 +71,12 @@ class AuthService {
     // 2. Verify Firebase ID Token
     let decodedToken;
     try {
-      const admin = require('../../config/firebase');
-      if (admin.apps.length > 0) {
-        decodedToken = await admin.auth().verifyIdToken(idToken);
+      require('../../config/firebase');
+      const { getApps } = require('firebase-admin/app');
+      const { getAuth } = require('firebase-admin/auth');
+      
+      if (getApps().length > 0) {
+        decodedToken = await getAuth().verifyIdToken(idToken);
       } else {
         // If admin not initialized (no service account), mock the verification based on env
         if (process.env.MOCK_FIREBASE === 'true') {
