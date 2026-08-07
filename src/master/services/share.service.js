@@ -1,5 +1,5 @@
 const bcrypt = require('bcryptjs');
-const { v4: uuidv4 } = require('uuid');
+const crypto = require('crypto');
 const { getDatabase } = require('../../repositories/database');
 const { NotFoundError, AuthorizationError } = require('../../utils/errors');
 const wss = require('./websocket.service'); // we'll implement this next
@@ -13,7 +13,7 @@ class ShareService {
     const file = await this.db.findFileById(fileId);
     if (!file || file.userId.toString() !== userId) throw new NotFoundError('File not found');
 
-    const shareToken = uuidv4();
+    const shareToken = crypto.randomUUID();
     const updateObj = {
       isPublic: true,
       shareToken,
