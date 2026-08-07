@@ -12,7 +12,8 @@ export default function Dashboard({ token }) {
 
   const fetchItems = async () => {
     try {
-      const res = await fetch('/api/v1/folders/root', {
+      const apiUrl = import.meta.env.VITE_API_URL || '';
+      const res = await fetch(`${apiUrl}/api/v1/files`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
