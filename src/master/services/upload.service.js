@@ -6,9 +6,8 @@ const { getPopulatedRing } = require('../../services/consistentHash');
 const { ValidationError, QuotaExceededError, NotFoundError, ConflictError } = require('../../utils/errors');
 
 class UploadService {
-  _getDb() {
+  get db() {
     return getDatabase();
-  }
   }
 
   // Calculate chunk size based on file size (Adaptive Chunk Sizing)
@@ -20,7 +19,7 @@ class UploadService {
   }
 
   async initUploadSession(userId, { fileName, fileSize, mimeType, folderId, tags, chunkHashes }) {
-    const db = this._getDb();
+    const db = this.db;
     if (!chunkHashes || !chunkHashes.length) {
       throw new ValidationError('chunkHashes array is required');
     }
@@ -139,7 +138,7 @@ class UploadService {
   }
 
   async getUploadStatus(sessionId, userId) {
-    const db = this._getDb();
+    const db = this.db;
     const session = await db.findSessionById(sessionId);
     if (!session || session.userId.toString() !== userId) {
       throw new NotFoundError('Session not found');
@@ -154,7 +153,7 @@ class UploadService {
   }
 
   async finalizeUploadSession(sessionId, userId, merkleRoot) {
-    const db = this._getDb();
+    const db = this.db;
     const session = await db.findSessionById(sessionId);
     if (!session || session.userId.toString() !== userId) {
       throw new NotFoundError('Session not found');
@@ -191,7 +190,7 @@ class UploadService {
   }
 
   async abortUploadSession(sessionId, userId) {
-    const db = this._getDb();
+    const db = this.db;
     const session = await db.findSessionById(sessionId);
     if (!session || session.userId.toString() !== userId) {
       throw new NotFoundError('Session not found');
