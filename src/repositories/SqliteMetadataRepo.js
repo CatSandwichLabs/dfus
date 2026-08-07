@@ -220,6 +220,13 @@ class SqliteMetadataRepo extends IMetadataRepository {
       WHERE id = ?
     `).run(stats.chunksStored || 0, stats.diskUsage || 0, workerId);
   }
+
+  async close() {
+    if (this.db) {
+      this.db.close();
+      this.db = null;
+    }
+  }
 }
 
 module.exports = SqliteMetadataRepo;

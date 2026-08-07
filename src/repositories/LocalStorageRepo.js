@@ -1,6 +1,6 @@
 const fs = require('fs').promises;
 const path = require('path');
-const IStorageRepository = require('./IStorageRepository');
+const IStorageRepository = require('./interfaces/IStorageRepository');
 const { StorageError } = require('../utils/errors');
 const config = require('../config/env');
 

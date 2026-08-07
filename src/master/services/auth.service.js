@@ -1,0 +1,296 @@
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { authenticator } = require('otplib');
+const qrcode = require('qrcode');
+const { nanoid } = require('nanoid');
+const crypto = require('crypto');
+const config = require('../../config/env');
+const { getDatabase } = require('../../repositories/database');
+const { AuthenticationError, ConflictError, ValidationError, NotFoundError } = require('../../utils/errors');
+const { hashString } = require('../../utils/hash');
+
+class AuthService {
+  constructor() {
+    this.db = getDatabase();
+  }
+
+  _generateAccessToken(user, sessionId = null) {
+    return jwt.sign(
+      { userId: user._id, role: user.role, sessionId },
+      config.JWT.ACCESS_SECRET,
+      { expiresIn: config.JWT.ACCESS_EXPIRES_IN }
+    );
+  }
+
+  async _generateRefreshToken(userId, sessionId = null) {
+    const tokenId = nanoid(32);
+    const tokenPayload = { userId, tokenId, sessionId };
+    const refreshToken = jwt.sign(tokenPayload, config.JWT.REFRESH_SECRET, { expiresIn: config.JWT.REFRESH_EXPIRES_IN });
+    
+    const tokenHash = hashString(refreshToken);
+    const expiresAt = new Date();
+    // Assuming 7 days default
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    await this.db.createRefreshToken({
+      userId,
+      tokenHash,
+      expiresAt
+    });
+
+    return refreshToken;
+  }
+
+  async registerUser({ username, email, password }) {
+    // Check duplicates
+    const [existingEmail, existingUsername] = await Promise.all([
+      this.db.findUserByEmail(email),
+      this.db.findUserByUsername(username)
+    ]);
+
+    if (existingEmail) throw new ConflictError('Email already in use');
+    if (existingUsername) throw new ConflictError('Username already in use');
+
+    // First user admin
+    let role = 'user';
+    if (config.AUTH.FIRST_USER_ADMIN) {
+      const count = await this.db.getUserCount();
+      if (count === 0) role = 'admin';
+    }
+
+    const salt = await bcrypt.genSalt(12);
+    const passwordHash = await bcrypt.hash(password, salt);
+
+    const user = await this.db.createUser({
+      username,
+      email: email.toLowerCase(),
+      passwordHash,
+      role,
+      storageQuota: config.STORAGE.DEFAULT_QUOTA
+    });
+
+    const userObj = { ...user };
+    delete userObj.passwordHash;
+    delete userObj.twoFactorSecret;
+    delete userObj.backupCodes;
+
+    const accessToken = this._generateAccessToken(user);
+    const refreshToken = await this._generateRefreshToken(user._id);
+
+    return { user: userObj, accessToken, refreshToken };
+  }
+
+  async loginUser(email, password, ip, userAgent) {
+    const user = await this.db.findUserByEmail(email);
+    if (!user) throw new AuthenticationError('Invalid credentials');
+
+    const isValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isValid) throw new AuthenticationError('Invalid credentials');
+
+    if (user.twoFactorEnabled) {
+      // Generate a temporary token to pass to the 2FA verification step
+      const tempToken = jwt.sign(
+        { userId: user._id, type: '2fa_partial' },
+        config.JWT.ACCESS_SECRET,
+        { expiresIn: '5m' }
+      );
+      return { requires2FA: true, tempToken };
+    }
+
+    return await this._completeLogin(user, ip, userAgent);
+  }
+
+  async _completeLogin(user, ip, userAgent) {
+    // Record login session
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+    const session = await this.db.createLoginSession({
+      userId: user._id,
+      ipAddress: ip,
+      userAgent,
+      expiresAt
+    });
+
+    // Update lastLoginAt
+    await this.db.updateUser(user._id, { lastLoginAt: new Date() });
+
+    const accessToken = this._generateAccessToken(user, session._id);
+    const refreshToken = await this._generateRefreshToken(user._id, session._id);
+
+    const userObj = { ...user };
+    delete userObj.passwordHash;
+    delete userObj.twoFactorSecret;
+    delete userObj.backupCodes;
+
+    return { user: userObj, accessToken, refreshToken };
+  }
+
+  async setup2FA(userId) {
+    const user = await this.db.findUserById(userId);
+    if (!user) throw new NotFoundError('User not found');
+    if (user.twoFactorEnabled) throw new ConflictError('2FA already enabled');
+
+    const secret = authenticator.generateSecret();
+    const otpauth = authenticator.keyuri(user.email, 'DFUS', secret);
+    const qrCodeUrl = await qrcode.toDataURL(otpauth);
+
+    // Save secret temporarily or send to client to verify before enabling
+    // We update the user with the secret but leave enabled=false until verified
+    await this.db.updateUser(userId, { twoFactorSecret: secret });
+
+    return { secret, qrCodeUrl };
+  }
+
+  async verify2FASetup(userId, code) {
+    const user = await this.db.findUserById(userId);
+    if (!user || !user.twoFactorSecret) throw new ValidationError('2FA setup not initiated');
+
+    const isValid = authenticator.verify({ token: code, secret: user.twoFactorSecret });
+    if (!isValid) throw new AuthenticationError('Invalid 2FA code');
+
+    // Generate backup codes
+    const rawBackupCodes = Array.from({ length: 10 }, () => nanoid(8));
+    const backupCodesHash = await Promise.all(rawBackupCodes.map(c => bcrypt.hash(c, 10)));
+    
+    const backupCodes = backupCodesHash.map(hash => ({ codeHash: hash, used: false }));
+
+    await this.db.updateUser(userId, {
+      twoFactorEnabled: true,
+      backupCodes
+    });
+
+    return { backupCodes: rawBackupCodes };
+  }
+
+  async verify2FALogin(tempToken, code, ip, userAgent) {
+    try {
+      const decoded = jwt.verify(tempToken, config.JWT.ACCESS_SECRET);
+      if (decoded.type !== '2fa_partial') throw new AuthenticationError('Invalid token type');
+
+      const user = await this.db.findUserById(decoded.userId);
+      if (!user) throw new AuthenticationError('User not found');
+
+      // Check TOTP
+      let isValid = authenticator.verify({ token: code, secret: user.twoFactorSecret });
+      
+      // If TOTP fails, check backup codes
+      if (!isValid && user.backupCodes) {
+        for (let i = 0; i < user.backupCodes.length; i++) {
+          if (!user.backupCodes[i].used && await bcrypt.compare(code, user.backupCodes[i].codeHash)) {
+            isValid = true;
+            // Mark backup code as used
+            const newBackupCodes = [...user.backupCodes];
+            newBackupCodes[i].used = true;
+            await this.db.updateUser(user._id, { backupCodes: newBackupCodes });
+            break;
+          }
+        }
+      }
+
+      if (!isValid) throw new AuthenticationError('Invalid 2FA code');
+
+      return await this._completeLogin(user, ip, userAgent);
+    } catch (err) {
+      if (err instanceof jwt.JsonWebTokenError) {
+        throw new AuthenticationError('Invalid or expired 2FA token');
+      }
+      throw err;
+    }
+  }
+
+  async disable2FA(userId, password, code) {
+    const user = await this.db.findUserById(userId);
+    const isValidPwd = await bcrypt.compare(password, user.passwordHash);
+    if (!isValidPwd) throw new AuthenticationError('Invalid password');
+
+    const isValidCode = authenticator.verify({ token: code, secret: user.twoFactorSecret });
+    if (!isValidCode) throw new AuthenticationError('Invalid 2FA code');
+
+    await this.db.updateUser(userId, {
+      twoFactorEnabled: false,
+      twoFactorSecret: null,
+      backupCodes: []
+    });
+  }
+
+  async refreshAccessToken(oldRefreshToken, ip, userAgent) {
+    const tokenHash = hashString(oldRefreshToken);
+    const storedToken = await this.db.findRefreshToken(tokenHash);
+
+    if (!storedToken) {
+      // Possible reuse/replay attack. Find user from token payload if possible and wipe all refresh tokens
+      try {
+        const decoded = jwt.verify(oldRefreshToken, config.JWT.REFRESH_SECRET, { ignoreExpiration: true });
+        if (decoded && decoded.userId) {
+          await this.db.deleteAllUserRefreshTokens(decoded.userId);
+        }
+      } catch (e) {
+        // Ignore malformed tokens
+      }
+      throw new AuthenticationError('Invalid refresh token. All sessions revoked.');
+    }
+
+    if (new Date() > new Date(storedToken.expiresAt)) {
+      await this.db.deleteRefreshToken(tokenHash);
+      throw new AuthenticationError('Refresh token expired');
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(oldRefreshToken, config.JWT.REFRESH_SECRET);
+    } catch (err) {
+      await this.db.deleteRefreshToken(tokenHash);
+      throw new AuthenticationError('Invalid refresh token');
+    }
+
+    const user = await this.db.findUserById(decoded.userId);
+    if (!user) throw new AuthenticationError('User not found');
+
+    // Token Rotation
+    await this.db.deleteRefreshToken(tokenHash);
+    const newAccessToken = this._generateAccessToken(user, decoded.sessionId);
+    const newRefreshToken = await this._generateRefreshToken(user._id, decoded.sessionId);
+
+    return { accessToken: newAccessToken, refreshToken: newRefreshToken };
+  }
+
+  async logoutUser(userId, refreshToken, sessionId) {
+    if (refreshToken) {
+      const tokenHash = hashString(refreshToken);
+      await this.db.deleteRefreshToken(tokenHash);
+    }
+    if (sessionId) {
+      await this.db.revokeSession(sessionId);
+    }
+  }
+
+  async createApiKey(userId, name, expiresAt) {
+    const rawKey = `dfus_api_${nanoid(40)}`;
+    const keyHash = hashString(rawKey);
+    const keyPrefix = rawKey.substring(0, 15);
+
+    await this.db.createApiKey({
+      userId,
+      name,
+      keyHash,
+      keyPrefix,
+      expiresAt: expiresAt || null
+    });
+
+    return rawKey;
+  }
+
+  async getApiKeys(userId) {
+    return await this.db.getApiKeysByUserId(userId);
+  }
+
+  async revokeApiKey(userId, keyId) {
+    // Should verify ownership in DB or repo
+    const keys = await this.db.getApiKeysByUserId(userId);
+    const key = keys.find(k => k._id.toString() === keyId);
+    if (!key) throw new NotFoundError('API key not found');
+    await this.db.revokeApiKey(keyId);
+  }
+}
+
+module.exports = new AuthService();

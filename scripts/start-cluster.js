@@ -1,57 +1,41 @@
-const { fork } = require('child_process');
+const { spawn } = require('child_process');
 const path = require('path');
-const config = require('../src/config/env');
-const { createLogger } = require('../src/utils/logger');
 
-const logger = createLogger('cluster-manager');
+const masterPath = path.join(__dirname, '../src/master/server.js');
+const workerPath = path.join(__dirname, '../src/worker/server.js');
 
-logger.info(`Starting DFUS Cluster in ${config.MODE} mode`);
+const numWorkers = process.env.NUM_WORKERS || 3;
 
-// Start Master Node
-const masterScript = path.join(__dirname, '../src/master/server.js');
-const masterProcess = fork(masterScript, [], {
-  env: { ...process.env, SERVICE_NAME: 'master' }
+// Start Master
+const masterProcess = spawn('node', [masterPath], { stdio: 'inherit' });
+
+masterProcess.on('error', (err) => {
+  console.error('Failed to start master process:', err);
 });
 
-masterProcess.on('exit', (code) => {
-  logger.error(`Master process exited with code ${code}`);
-  process.exit(code);
-});
-
-// Start Worker Nodes
-const workers = [];
-for (let i = 0; i < config.WORKER.COUNT; i++) {
-  const workerPort = config.WORKER.BASE_PORT + i;
-  const workerId = `worker-${i + 1}`;
-  
-  const workerScript = path.join(__dirname, '../src/worker/server.js');
-  const workerProcess = fork(workerScript, [], {
-    env: { 
+// Wait a bit for master to start before starting workers
+setTimeout(() => {
+  for (let i = 0; i < numWorkers; i++) {
+    const port = 4000 + i;
+    const workerEnv = { 
       ...process.env, 
-      SERVICE_NAME: workerId,
-      WORKER_ID: workerId,
-      WORKER_PORT: workerPort
-    }
-  });
+      PORT: port,
+      WORKER_ID: `worker_${i + 1}`
+    };
+    
+    const workerProcess = spawn('node', [workerPath], { 
+      env: workerEnv,
+      stdio: 'inherit' 
+    });
 
-  workerProcess.on('exit', (code) => {
-    logger.error(`Worker process ${workerId} exited with code ${code}`);
-  });
+    workerProcess.on('error', (err) => {
+      console.error(`Failed to start worker ${i + 1}:`, err);
+    });
+  }
+}, 2000);
 
-  workers.push({ id: workerId, process: workerProcess });
-}
-
-// Graceful shutdown handling
-const shutdown = () => {
-  logger.info('Shutting down cluster...');
-  masterProcess.kill('SIGTERM');
-  workers.forEach(w => w.process.kill('SIGTERM'));
-  
-  setTimeout(() => {
-    logger.warn('Forcing exit after timeout');
-    process.exit(0);
-  }, 5000);
-};
-
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+// Handle graceful shutdown
+process.on('SIGINT', () => {
+  console.log('Shutting down cluster...');
+  process.exit(0);
+});

@@ -43,9 +43,9 @@ router.get('/status', async (req, res, next) => {
     const parsedChunks = parseInt(totalChunks, 10);
     const parsedSize = parseInt(fileSizeBytes, 10);
 
-    if (isNaN(parsedChunks) || parsedChunks < 0 || parsedChunks > 500000) {
+    if (isNaN(parsedChunks) || parsedChunks <= 0 || parsedChunks > 500000) {
       return res.status(400).json({
-        error: { message: 'totalChunks must be an integer between 0 and 500000', status: 400 },
+        error: { message: 'totalChunks must be a positive integer between 1 and 500000', status: 400 },
       });
     }
 
