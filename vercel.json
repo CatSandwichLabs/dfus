@@ -19,7 +19,7 @@
   "crons": [
     {
       "path": "/api/v1/system/cron/heartbeat",
-      "schedule": "* * * * *"
+      "schedule": "0 0 * * *"
     }
   ]
 }
