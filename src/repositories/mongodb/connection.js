@@ -8,9 +8,11 @@ const logger = require('../../utils/logger');
 class DatabaseConnection {
   constructor() {
     this.isConnected = false;
+    // Fail fast on Vercel so we get a JSON error instead of a 10s timeout crash
+    const isServerless = process.env.VERCEL === '1';
     this.retryCount = 0;
-    this.maxRetries = 5;
-    this.baseDelayMs = 1000;
+    this.maxRetries = isServerless ? 0 : 5;
+    this.baseDelayMs = isServerless ? 500 : 1000;
   }
 
   async connect() {
@@ -47,7 +49,7 @@ class DatabaseConnection {
         logger.info(`Attempting to connect to MongoDB (Attempt ${this.retryCount + 1}/${this.maxRetries})...`);
         await mongoose.connect(config.MONGO.URI, {
           // Additional Mongoose configuration can be added here if needed in mongoose 8.x
-          serverSelectionTimeoutMS: 5000,
+          serverSelectionTimeoutMS: isServerless ? 3000 : 5000,
         });
         return; // Success
       } catch (err) {
