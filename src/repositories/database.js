@@ -1,20 +1,42 @@
 const config = require('../config/env');
-const SqliteMetadataRepo = require('./SqliteMetadataRepo');
-const MongoMetadataRepo = require('./mongodb/MongoMetadataRepo');
-const dbConnection = require('./mongodb/connection');
 
 let dbInstance = null;
+let initPromise = null;
 
 async function initDatabase() {
-  if (!dbInstance) {
-    if (config.MODE === 'presentation') {
-      dbInstance = new SqliteMetadataRepo();
-    } else {
-      await dbConnection.connect();
-      dbInstance = new MongoMetadataRepo();
+  // Re-use existing promise to prevent double-initialization in serverless cold starts
+  if (initPromise) return initPromise;
+
+  initPromise = (async () => {
+    if (!dbInstance) {
+      if (config.MODE === 'presentation') {
+        // SQLite mode - only for local development, not serverless
+        try {
+          const SqliteMetadataRepo = require('./SqliteMetadataRepo');
+          dbInstance = new SqliteMetadataRepo();
+        } catch (err) {
+          // SQLite native module may not be available (e.g., on Vercel)
+          // Fall back to MongoDB if MONGODB_URI is available
+          if (config.MONGO.URI) {
+            const dbConnection = require('./mongodb/connection');
+            const MongoMetadataRepo = require('./mongodb/MongoMetadataRepo');
+            await dbConnection.connect();
+            dbInstance = new MongoMetadataRepo();
+          } else {
+            throw new Error('Neither SQLite nor MongoDB is available. Set MONGODB_URI or install better-sqlite3.');
+          }
+        }
+      } else {
+        const dbConnection = require('./mongodb/connection');
+        const MongoMetadataRepo = require('./mongodb/MongoMetadataRepo');
+        await dbConnection.connect();
+        dbInstance = new MongoMetadataRepo();
+      }
     }
-  }
-  return dbInstance;
+    return dbInstance;
+  })();
+
+  return initPromise;
 }
 
 function getDatabase() {

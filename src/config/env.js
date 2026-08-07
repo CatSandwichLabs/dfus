@@ -6,7 +6,11 @@ const env = process.env;
 const required = [];
 
 if (env.NODE_ENV !== 'test') {
-  required.push('WORKER_SECRET', 'JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET');
+  // In serverless mode, worker secret is optional since workers connect directly
+  if (env.VERCEL !== '1') {
+    required.push('WORKER_SECRET');
+  }
+  required.push('JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET');
   if (env.MODE === 'cloud') {
     required.push('MONGODB_URI', 'R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET_NAME');
   }
@@ -96,6 +100,19 @@ const config = {
   FIREBASE: {
     PROJECT_ID: env.FIREBASE_PROJECT_ID
   },
+
+  PUSHER: {
+    APP_ID: env.PUSHER_APP_ID || null,
+    KEY: env.PUSHER_KEY || null,
+    SECRET: env.PUSHER_SECRET || null,
+    CLUSTER: env.PUSHER_CLUSTER || 'ap2'
+  },
+
+  CRON: {
+    SECRET: env.CRON_SECRET || null
+  },
+
+  RECAPTCHA_API_KEY: env.RECAPTCHA_API_KEY || null,
   
   STORAGE: {
     DEFAULT_QUOTA: parsePositiveInt(env.DEFAULT_STORAGE_QUOTA, 1073741824, 1, Infinity, 'DEFAULT_STORAGE_QUOTA'), // 1GB
@@ -140,6 +157,8 @@ Object.freeze(config.AUTH);
 Object.freeze(config.CORS);
 Object.freeze(config.JWT);
 Object.freeze(config.FIREBASE);
+Object.freeze(config.PUSHER);
+Object.freeze(config.CRON);
 Object.freeze(config.STORAGE);
 Object.freeze(config.SYSTEM);
 Object.freeze(config.SQLITE);

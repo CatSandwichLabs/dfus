@@ -9,11 +9,9 @@ promClient.collectDefaultMetrics();
 const config = require('../config/env');
 const { createLogger, createHttpLogger } = require('../utils/logger');
 const errorHandler = require('../middleware/errorHandler');
-const workerAuth = require('../middleware/workerAuth');
 const { generalLimiter, authLimiter } = require('../middleware/rateLimiter');
 const { NotFoundError } = require('../utils/errors');
 const { initDatabase, getDatabase } = require('../repositories/database');
-const { startHeartbeat, stopHeartbeat } = require('../services/heartbeat.service');
 const authRoutes = require('./routes/auth.routes');
 const fileRoutes = require('./routes/file.routes');
 const accountRoutes = require('./routes/account.routes');
@@ -24,7 +22,7 @@ const trashRoutes = require('./routes/trash.routes');
 const shareRoutes = require('./routes/share.routes');
 const workerRoutes = require('./routes/worker.routes');
 const adminRoutes = require('./routes/admin.routes');
-const wss = require('./services/websocket.service');
+const cronRoutes = require('./routes/cron.routes');
 
 const logger = createLogger('master');
 const app = express();
@@ -55,6 +53,21 @@ app.use('/api/auth', authLimiter);
 // Static files (SPA)
 app.use(express.static(path.join(__dirname, '../../public')));
 
+// Ensure database is initialized before handling any request (for serverless cold starts)
+let dbInitPromise = null;
+app.use(async (req, res, next) => {
+  try {
+    if (!dbInitPromise) {
+      dbInitPromise = initDatabase();
+    }
+    await dbInitPromise;
+    next();
+  } catch (err) {
+    logger.error('Database initialization failed:', err);
+    next(err);
+  }
+});
+
 // Routes
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/files', fileRoutes);
@@ -66,6 +79,7 @@ app.use('/api/v1/trash', trashRoutes);
 app.use('/api/v1/shares', shareRoutes);
 app.use('/api/v1/system/workers', workerRoutes);
 app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/system/cron', cronRoutes);
 
 app.get('/metrics', async (req, res) => {
   res.set('Content-Type', promClient.register.contentType);
@@ -80,59 +94,68 @@ app.use((req, res, next) => {
 // Error handling middleware (Must be last)
 app.use(errorHandler);
 
-let server;
-
-async function startServer() {
-  try {
-    await initDatabase();
-    const PORT = config.MASTER.PORT;
-    server = app.listen(PORT, () => {
-      logger.info(`Master node started on port ${PORT} in ${config.MODE} mode`);
-      wss.init(server);
-      startHeartbeat();
-    });
-  } catch (err) {
-    logger.error('Failed to start master server:', err);
-    process.exit(1);
-  }
-}
-
-// Graceful Shutdown Handler
-const gracefulShutdown = (signal) => {
-  logger.info(`Received ${signal}. Initiating Master graceful shutdown...`);
-  
-  stopHeartbeat();
-  
-  if (server) {
-    server.close(async () => {
-      logger.info('Master HTTP server closed.');
-      try {
-        const db = getDatabase();
-        if (db && typeof db.close === 'function') {
-          await db.close();
-          logger.info('Master database connection closed cleanly.');
-        }
-      } catch (err) {
-        logger.error(`Error closing database connection: ${err.message}`);
-      }
-      logger.info('Master node graceful shutdown complete.');
-      process.exit(0);
-    });
-
-    setTimeout(() => {
-      logger.error('Forcing Master node shutdown after 5s timeout.');
-      process.exit(1);
-    }, 5000).unref();
-  } else {
-    process.exit(0);
-  }
-};
-
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-
+// --- Local Development Server ---
+// Only start listening when run directly (not when imported by Vercel)
 if (require.main === module) {
-  startServer();
+  (async () => {
+    try {
+      await initDatabase();
+      const PORT = config.MASTER.PORT;
+      const server = app.listen(PORT, () => {
+        logger.info(`Master node started on port ${PORT} in ${config.MODE} mode`);
+        
+        // WebSocket and heartbeat only work in local/Docker mode
+        try {
+          const wss = require('./services/websocket.service');
+          wss.init(server);
+        } catch (e) {
+          logger.warn('WebSocket service not available (expected in serverless mode)');
+        }
+        
+        const { startHeartbeat } = require('../services/heartbeat.service');
+        startHeartbeat();
+      });
+
+      // Graceful Shutdown Handler
+      const gracefulShutdown = (signal) => {
+        logger.info(`Received ${signal}. Initiating Master graceful shutdown...`);
+        
+        const { stopHeartbeat } = require('../services/heartbeat.service');
+        stopHeartbeat();
+        
+        if (server) {
+          server.close(async () => {
+            logger.info('Master HTTP server closed.');
+            try {
+              const db = getDatabase();
+              if (db && typeof db.close === 'function') {
+                await db.close();
+                logger.info('Master database connection closed cleanly.');
+              }
+            } catch (err) {
+              logger.error(`Error closing database connection: ${err.message}`);
+            }
+            logger.info('Master node graceful shutdown complete.');
+            process.exit(0);
+          });
+
+          setTimeout(() => {
+            logger.error('Forcing Master node shutdown after 5s timeout.');
+            process.exit(1);
+          }, 5000).unref();
+        } else {
+          process.exit(0);
+        }
+      };
+
+      process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+      process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+    } catch (err) {
+      logger.error('Failed to start master server:', err);
+      process.exit(1);
+    }
+  })();
 }
 
-module.exports = { app, startServer };
+// Export the Express app for Vercel serverless
+module.exports = app;

@@ -1,5 +1,4 @@
 const { getDatabase } = require('../../repositories/database');
-const hashRing = require('../../services/consistentHash');
 const { createLogger } = require('../../utils/logger');
 
 const logger = createLogger('worker.controller');
@@ -10,8 +9,8 @@ class WorkerController {
     const db = getDatabase();
     await db.registerWorker({ workerId: id, host, port, status: 'alive' });
     
-    // Add to hash ring
-    hashRing.addNode(id);
+    // No need to maintain an in-memory hash ring — 
+    // it is rebuilt from the database on each request (serverless-safe).
     
     logger.info(`Worker ${id} registered successfully from ${host}:${port}`);
     res.json({ message: 'Registered successfully' });

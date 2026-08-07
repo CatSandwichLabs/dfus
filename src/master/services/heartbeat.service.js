@@ -1,6 +1,4 @@
 const { getDatabase } = require('../../repositories/database');
-const hashRing = require('../../services/consistentHash');
-const replicationService = require('./replication.service');
 const { createLogger } = require('../../utils/logger');
 const config = require('../../config/env');
 
@@ -13,55 +11,73 @@ class MasterHeartbeatService {
     const worker = await db.findWorkerById(workerId);
     
     if (!worker) {
-      // If we don't have it, it must register first
       const error = new Error('Worker not registered');
       error.status = 404;
       throw error;
     }
 
     await db.updateWorkerStatus(workerId, 'alive');
-    // Also update loadStats if we have a field for it
     if (db.updateWorkerLoad) {
       await db.updateWorkerLoad(workerId, loadStats);
     }
     
-    hashRing.addNode(workerId);
+    // In serverless mode, the hash ring is rebuilt per-request from DB,
+    // so we don't need to maintain an in-memory ring here.
   }
 
-  startMonitor() {
-    if (intervalId) return;
-    
-    // Check every 30s for dead workers
-    const CHECK_INTERVAL = config.SYSTEM.HEARTBEAT_INTERVAL || 30000;
-    
-    intervalId = setInterval(async () => {
-      try {
-        const db = getDatabase();
-        const workers = await db.getAllWorkers();
+  /**
+   * Check for dead workers - can be called by either setInterval (local) 
+   * or a Vercel Cron Job hitting /api/v1/system/cron/heartbeat.
+   */
+  async checkDeadWorkers() {
+    try {
+      const db = getDatabase();
+      const workers = await db.getAllWorkers();
+      
+      const now = new Date();
+      const CHECK_INTERVAL = config.SYSTEM.HEARTBEAT_INTERVAL || 30000;
+      const THRESHOLD = CHECK_INTERVAL * 3;
+      let deadCount = 0;
+
+      for (const worker of workers) {
+        if (worker.status === 'dead') continue;
+
+        const timeSinceLastSeen = now - new Date(worker.updatedAt);
         
-        const now = new Date();
-        const THRESHOLD = CHECK_INTERVAL * 3; // 3 missed beats
+        if (timeSinceLastSeen > THRESHOLD) {
+          logger.warn(`Worker ${worker.id} marked as DEAD (last seen ${timeSinceLastSeen}ms ago)`);
+          await db.updateWorkerStatus(worker.id, 'dead');
+          deadCount++;
 
-        for (const worker of workers) {
-          if (worker.status === 'dead') continue;
-
-          const timeSinceLastSeen = now - new Date(worker.updatedAt);
-          
-          if (timeSinceLastSeen > THRESHOLD) {
-            logger.warn(`Worker ${worker.id} marked as DEAD (last seen ${timeSinceLastSeen}ms ago)`);
-            
-            await db.updateWorkerStatus(worker.id, 'dead');
-            hashRing.removeNode(worker.id);
-
-            // Trigger replication
+          // Trigger replication asynchronously
+          try {
+            const replicationService = require('./replication.service');
             replicationService.recoverWorkerChunks(worker.id).catch(err => {
               logger.error(`Failed to recover chunks for worker ${worker.id}: ${err.message}`);
             });
+          } catch (e) {
+            logger.error(`Replication service error: ${e.message}`);
           }
         }
-      } catch (err) {
-        logger.error(`Heartbeat monitor error: ${err.message}`);
       }
+
+      return { checked: workers.length, deadFound: deadCount };
+    } catch (err) {
+      logger.error(`Heartbeat monitor error: ${err.message}`);
+      throw err;
+    }
+  }
+
+  /**
+   * Start the local background monitor (only used in local/Docker mode).
+   * In Vercel, the cron route calls checkDeadWorkers() directly instead.
+   */
+  startMonitor() {
+    if (intervalId) return;
+    const CHECK_INTERVAL = config.SYSTEM.HEARTBEAT_INTERVAL || 30000;
+    
+    intervalId = setInterval(async () => {
+      await this.checkDeadWorkers();
     }, CHECK_INTERVAL);
   }
 
@@ -73,4 +89,17 @@ class MasterHeartbeatService {
   }
 }
 
-module.exports = new MasterHeartbeatService();
+const heartbeatService = new MasterHeartbeatService();
+
+// Legacy exports for backward compatibility with server.js
+function startHeartbeat() {
+  heartbeatService.startMonitor();
+}
+
+function stopHeartbeat() {
+  heartbeatService.stopMonitor();
+}
+
+module.exports = heartbeatService;
+module.exports.startHeartbeat = startHeartbeat;
+module.exports.stopHeartbeat = stopHeartbeat;

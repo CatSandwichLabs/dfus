@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const fetch = require('node-fetch');
 const { getDatabase } = require('../../repositories/database');
-const hashRing = require('../../services/consistentHash');
+const { getPopulatedRing } = require('../../services/consistentHash');
 const { createLogger } = require('../../utils/logger');
 const config = require('../../config/env');
 
@@ -31,6 +31,7 @@ class ReplicationService {
         const sourceWorkerId = activeWorkers[0];
         
         // Find a new target worker that doesn't already have it
+        const hashRing = await getPopulatedRing(db);
         const targetNodes = hashRing.getNodes(chunk.chunkHash, REPLICATION_FACTOR + 1);
         const targetWorkerId = targetNodes.find(id => !activeWorkers.includes(id) && id !== deadWorkerId);
         

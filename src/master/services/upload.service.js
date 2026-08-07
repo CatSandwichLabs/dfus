@@ -2,12 +2,13 @@ const jwt = require('jsonwebtoken');
 const { nanoid } = require('nanoid');
 const { getDatabase } = require('../../repositories/database');
 const config = require('../../config/env');
-const hashRing = require('../../services/consistentHash');
+const { getPopulatedRing } = require('../../services/consistentHash');
 const { ValidationError, QuotaExceededError, NotFoundError, ConflictError } = require('../../utils/errors');
 
 class UploadService {
-  constructor() {
-    this.db = getDatabase();
+  _getDb() {
+    return getDatabase();
+  }
   }
 
   // Calculate chunk size based on file size (Adaptive Chunk Sizing)
@@ -19,12 +20,13 @@ class UploadService {
   }
 
   async initUploadSession(userId, { fileName, fileSize, mimeType, folderId, tags, chunkHashes }) {
+    const db = this._getDb();
     if (!chunkHashes || !chunkHashes.length) {
       throw new ValidationError('chunkHashes array is required');
     }
 
     // Check Quota
-    const user = await this.db.findUserById(userId);
+    const user = await db.findUserById(userId);
     if (!user) throw new NotFoundError('User not found');
     
     if (user.storageUsed + fileSize > user.storageQuota) {
@@ -32,7 +34,7 @@ class UploadService {
     }
 
     // Create File in DB (status: 'uploading')
-    const file = await this.db.createFile({
+    const file = await db.createFile({
       userId,
       folderId: folderId || null,
       originalName: fileName,
@@ -52,12 +54,15 @@ class UploadService {
 
     const chunkStatus = new Array(chunkHashes.length).fill(false);
 
+    // Build hash ring from alive workers in the database (serverless-safe)
+    const hashRing = await getPopulatedRing(db);
+
     for (let i = 0; i < chunkHashes.length; i++) {
       const hash = chunkHashes[i];
-      const existingChunk = await this.db.findChunkByHash(hash);
+      const existingChunk = await db.findChunkByHash(hash);
 
       // Create Chunk DB record for tracking this file's chunk
-      await this.db.createChunk({
+      await db.createChunk({
         fileId: file._id,
         chunkHash: hash,
         chunkIndex: i,
@@ -89,7 +94,7 @@ class UploadService {
         }
         
         const workerId = primaryNodes[0];
-        const worker = await this.db.findWorkerById(workerId);
+        const worker = await db.findWorkerById(workerId);
         
         // Short-lived JWT for the chunk
         const token = jwt.sign(
@@ -113,7 +118,7 @@ class UploadService {
     const expiresAt = new Date();
     expiresAt.setHours(expiresAt.getHours() + 24); // 24 hours TTL
 
-    await this.db.createSession({
+    await db.createSession({
       sessionId,
       userId,
       fileId: file._id,
@@ -134,7 +139,8 @@ class UploadService {
   }
 
   async getUploadStatus(sessionId, userId) {
-    const session = await this.db.findSessionById(sessionId);
+    const db = this._getDb();
+    const session = await db.findSessionById(sessionId);
     if (!session || session.userId.toString() !== userId) {
       throw new NotFoundError('Session not found');
     }
@@ -148,7 +154,8 @@ class UploadService {
   }
 
   async finalizeUploadSession(sessionId, userId, merkleRoot) {
-    const session = await this.db.findSessionById(sessionId);
+    const db = this._getDb();
+    const session = await db.findSessionById(sessionId);
     if (!session || session.userId.toString() !== userId) {
       throw new NotFoundError('Session not found');
     }
@@ -160,7 +167,7 @@ class UploadService {
     }
 
     // Mark file as complete
-    await this.db.updateFile(session.fileId, {
+    await db.updateFile(session.fileId, {
       status: 'complete',
       merkleRoot
     });
@@ -171,27 +178,28 @@ class UploadService {
     // for simplicity and standard quota enforcement, we just add the file size.
     // Wait, the spec says: "Deduped chunks don't count toward quota... update storage quota".
     // To do this perfectly, we should calculate the sum of sizes of chunks that were just uploaded.
-    const file = await this.db.findFileById(session.fileId);
+    const file = await db.findFileById(session.fileId);
     
     // For now, let's just add the whole file size. The cleanup/refcount mechanism can be used to true up later if needed.
     // We will just increment user's storage.
-    await this.db.updateStorageUsed(userId, file.size);
+    await db.updateStorageUsed(userId, file.size);
 
     // Delete session
-    await this.db.deleteSession(sessionId);
+    await db.deleteSession(sessionId);
 
     return file;
   }
 
   async abortUploadSession(sessionId, userId) {
-    const session = await this.db.findSessionById(sessionId);
+    const db = this._getDb();
+    const session = await db.findSessionById(sessionId);
     if (!session || session.userId.toString() !== userId) {
       throw new NotFoundError('Session not found');
     }
 
     // Mark chunks as orphaned? If they were uploaded, they will be cleaned by cleanup service.
-    await this.db.updateFile(session.fileId, { status: 'failed' });
-    await this.db.deleteSession(sessionId);
+    await db.updateFile(session.fileId, { status: 'failed' });
+    await db.deleteSession(sessionId);
   }
 }
 

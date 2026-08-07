@@ -99,7 +99,44 @@ class ConsistentHashRing {
   }
 }
 
-// Singleton instance
+// --- Serverless-Compatible Hash Ring ---
+// In serverless mode, memory is wiped between requests.
+// This factory function rebuilds the ring from a list of worker IDs.
+
+/**
+ * Build a fresh ConsistentHashRing from an array of worker IDs.
+ * Call this per-request in serverless mode.
+ * 
+ * @param {string[]} workerIds - Array of alive worker IDs from the database.
+ * @returns {ConsistentHashRing} A fully populated hash ring.
+ */
+function buildRingFromWorkers(workerIds) {
+  const ring = new ConsistentHashRing();
+  for (const id of workerIds) {
+    ring.addNode(id);
+  }
+  return ring;
+}
+
+/**
+ * Get a hash ring populated with alive workers from the database.
+ * Works in both serverless (rebuilds each time) and local (uses cached ring).
+ * 
+ * @param {object} db - The database instance (from getDatabase())
+ * @returns {Promise<ConsistentHashRing>} A populated hash ring.
+ */
+async function getPopulatedRing(db) {
+  const workers = await db.getAllWorkers();
+  const aliveWorkerIds = workers
+    .filter(w => w.status === 'alive')
+    .map(w => w.id || w._id || w.workerId);
+  return buildRingFromWorkers(aliveWorkerIds);
+}
+
+// Singleton instance (used by local dev mode and backward compatibility)
 const hashRing = new ConsistentHashRing();
 
 module.exports = hashRing;
+module.exports.ConsistentHashRing = ConsistentHashRing;
+module.exports.buildRingFromWorkers = buildRingFromWorkers;
+module.exports.getPopulatedRing = getPopulatedRing;
