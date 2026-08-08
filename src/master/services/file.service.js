@@ -67,7 +67,7 @@ class FileService {
   }
 
   async listFiles(userId, parentFolderId = null) {
-    return await this.db.findFilesByUserId(userId, parentFolderId);
+    return await this.db.findFilesByUserId(userId, { folderId: parentFolderId });
   }
 
   async getFile(fileId, userId) {
