@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const { getDatabase } = require('../repositories/database');
+const { getDatabase } = require('../../repositories/database');
 
 class CleanupJob {
   start() {

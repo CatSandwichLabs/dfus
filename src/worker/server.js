@@ -10,7 +10,7 @@ const config = require('../config/env');
 const chunkRoutes = require('./routes/chunk.routes');
 const errorHandler = require('../middleware/errorHandler');
 const { startHeartbeat } = require('./services/heartbeat.service');
-const { initStorage } = require('./services/storage.service');
+const storageService = require('./services/storage.service');
 
 const logger = createLogger('worker');
 const app = express();
@@ -42,7 +42,7 @@ let server;
 
 async function startServer() {
   try {
-    await initStorage();
+    await storageService.initStorage();
     const PORT = config.WORKER.PORT;
     server = app.listen(PORT, () => {
       logger.info(`Worker node ${config.WORKER.ID} started on port ${PORT}`);
