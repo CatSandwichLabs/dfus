@@ -21,8 +21,9 @@ class WorkerHeartbeat {
         },
         body: JSON.stringify({
           id: config.WORKER.ID,
-          host: '127.0.0.1', // Real implementation would use public IP or resolvable hostname
-          port: config.WORKER.PORT
+          host: '127.0.0.1', 
+          port: config.WORKER.PORT,
+          publicUrl: process.env.RENDER_EXTERNAL_URL || null
         })
       });
 
@@ -54,7 +55,8 @@ class WorkerHeartbeat {
         },
         body: JSON.stringify({
           id: config.WORKER.ID,
-          load
+          load,
+          publicUrl: process.env.RENDER_EXTERNAL_URL || null
         })
       });
 

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, UploadCloud, File as FileIcon, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { X, UploadCloud, File as FileIcon, CheckCircle2, AlertCircle, Loader2, Server } from 'lucide-react';
 
 export default function UploadModal({ isOpen, onClose, token, currentFolderId, onUploadComplete }) {
   const [file, setFile] = useState(null);

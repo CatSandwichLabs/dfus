@@ -14,6 +14,10 @@ const WorkerSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  publicUrl: {
+    type: String,
+    default: null
+  },
   status: {
     type: String,
     enum: ['alive', 'suspect', 'dead'],

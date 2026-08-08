@@ -4,7 +4,7 @@ const readline = require('readline');
 // Replace these with the values from your Google Cloud Console
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'YOUR_CLIENT_ID';
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'YOUR_CLIENT_SECRET';
-const REDIRECT_URI = 'urn:ietf:wg:oauth:2.0:oob';
+const REDIRECT_URI = 'http://localhost:3000';
 
 const oauth2Client = new google.auth.OAuth2(
   CLIENT_ID,

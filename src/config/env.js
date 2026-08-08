@@ -74,10 +74,11 @@ const config = {
   },
   
   WORKER: {
+    MASTER_URL: env.MASTER_URL || 'http://localhost:3000',
     COUNT: parsePositiveInt(env.WORKER_COUNT, 3, 1, 64, 'WORKER_COUNT'),
     BASE_PORT: parsePositiveInt(env.WORKER_BASE_PORT, 4001, 1, 65535, 'WORKER_BASE_PORT'),
     SECRET: env.WORKER_SECRET || 'default-worker-secret-key',
-    ID: env.WORKER_ID || null,
+    ID: env.WORKER_ID || `worker-${Math.random().toString(36).substring(2, 10)}`,
     PORT: env.WORKER_PORT ? parsePositiveInt(env.WORKER_PORT, null, 1, 65535, 'WORKER_PORT') : null
   },
   

@@ -262,10 +262,10 @@ class MongoMetadataRepo extends IMetadataRepository {
   
   // --- Workers ---
   async registerWorker(workerData) {
-    const { workerId, host, port } = workerData;
+    const { workerId, host, port, publicUrl } = workerData;
     return await Worker.findOneAndUpdate(
       { workerId },
-      { host, port, status: 'alive', lastHeartbeat: new Date() },
+      { host, port, publicUrl, status: 'alive', lastHeartbeat: new Date() },
       { upsert: true, new: true }
     ).lean();
   }
@@ -274,10 +274,12 @@ class MongoMetadataRepo extends IMetadataRepository {
     return await Worker.findOne({ workerId }).lean();
   }
   
-  async updateWorkerHeartbeat(workerId, metrics) {
+  async updateWorkerHeartbeat(workerId, metrics, publicUrl) {
+    const updatePayload = { lastHeartbeat: new Date(), metrics, status: 'alive' };
+    if (publicUrl) updatePayload.publicUrl = publicUrl;
     return await Worker.findOneAndUpdate(
       { workerId },
-      { lastHeartbeat: new Date(), metrics, status: 'alive' },
+      updatePayload,
       { new: true }
     ).lean();
   }

@@ -26,7 +26,7 @@ class DownloadService {
 
       return {
         chunkId: chunk.chunkId,
-        workerUrl: `http://${chunk.primaryWorkerHost}:${chunk.primaryWorkerPort}`, // Should lookup worker from db
+        workerUrl: chunk.primaryWorkerPublicUrl ? chunk.primaryWorkerPublicUrl : `http://${chunk.primaryWorkerHost}:${chunk.primaryWorkerPort}`, // Should lookup worker from db
         token
       };
     });

@@ -5,9 +5,9 @@ const logger = createLogger('worker.controller');
 
 class WorkerController {
   async registerWorker(req, res) {
-    const { id, host, port } = req.body;
+    const { id, host, port, publicUrl } = req.body;
     const db = getDatabase();
-    await db.registerWorker({ workerId: id, host, port, status: 'alive' });
+    await db.registerWorker({ workerId: id, host, port, publicUrl, status: 'alive' });
     
     // No need to maintain an in-memory hash ring — 
     // it is rebuilt from the database on each request (serverless-safe).
@@ -17,9 +17,9 @@ class WorkerController {
   }
 
   async heartbeat(req, res) {
-    const { id, load } = req.body;
+    const { id, load, publicUrl } = req.body;
     const db = getDatabase();
-    await db.updateWorkerHeartbeat(id, load);
+    await db.updateWorkerHeartbeat(id, load, publicUrl);
     res.json({ message: 'Heartbeat acknowledged' });
   }
 

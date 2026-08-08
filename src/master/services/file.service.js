@@ -52,7 +52,7 @@ class FileService {
         index: chunk.chunkIndex,
         hash: chunk.chunkHash,
         size: chunk.size,
-        url: `http://${worker.host}:${worker.port}/chunks/${chunk.chunkHash}`,
+        url: worker.publicUrl ? `${worker.publicUrl}/chunks/${chunk.chunkHash}` : `http://${worker.host}:${worker.port}/chunks/${chunk.chunkHash}`,
         token
       });
     }

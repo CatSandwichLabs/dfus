@@ -102,7 +102,7 @@ class UploadService {
           { expiresIn: '15m' }
         );
 
-        const workerUrl = `http://${worker.host}:${worker.port}/chunks`;
+        const workerUrl = worker.publicUrl ? `${worker.publicUrl}/chunks` : `http://${worker.host}:${worker.port}/chunks`;
 
         assignments.push({
           chunkIndex: i,
