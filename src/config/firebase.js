@@ -1,4 +1,4 @@
-const { initializeApp, getApps } = require('firebase-admin/app');
+const admin = require('firebase-admin');
 const config = require('./env');
 const { createLogger } = require('../utils/logger');
 
@@ -8,8 +8,8 @@ const logger = createLogger('firebase-admin');
 // For production, you'd load a serviceAccountKey.json, but token verification often only needs the project ID.
 
 try {
-  if (getApps().length === 0) {
-    initializeApp({
+  if (!admin.apps.length) {
+    admin.initializeApp({
       projectId: config.FIREBASE.PROJECT_ID || 'dfs-system-3d4ba'
     });
     logger.info('Firebase Admin SDK initialized successfully');
@@ -18,4 +18,4 @@ try {
   logger.error(`Firebase Admin SDK initialization failed: ${err.message}`);
 }
 
-module.exports = { getApps };
+module.exports = admin;
