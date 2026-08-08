@@ -116,10 +116,10 @@ class AuthService {
     
     // 4. Create Session
     const sessionId = nanoid();
-    await this.db.createSession({
+    await this.db.createLoginSession({
       userId: user._id,
       sessionId,
-      ip,
+      ipAddress: ip,
       userAgent,
       lastActiveAt: new Date(),
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
@@ -194,8 +194,10 @@ class AuthService {
     // Record login session
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
+    const sessionId = nanoid();
     const session = await this.db.createLoginSession({
       userId: user._id,
+      sessionId,
       ipAddress: ip,
       userAgent,
       expiresAt
