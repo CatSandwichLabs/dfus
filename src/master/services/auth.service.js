@@ -106,6 +106,7 @@ class AuthService {
         phone: decodedToken.phone_number || null,
         role,
         isActive: true,
+        storageQuota: config.STORAGE?.DEFAULT_USER_QUOTA || 10737418240,
         createdAt: new Date(),
         updatedAt: new Date()
       };
