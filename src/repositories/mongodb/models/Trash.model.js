@@ -7,7 +7,7 @@ const TrashSchema = new mongoose.Schema({
     // Can point to File or Folder
   },
   userId: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: String,
     ref: 'User',
     required: true
   },

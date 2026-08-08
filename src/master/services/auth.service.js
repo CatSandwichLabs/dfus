@@ -152,6 +152,7 @@ class AuthService {
     const passwordHash = await bcrypt.hash(password, salt);
 
     const user = await this.db.createUser({
+      _id: require('nanoid').nanoid(),
       username,
       email: email.toLowerCase(),
       passwordHash,
@@ -206,8 +207,8 @@ class AuthService {
     // Update lastLoginAt
     await this.db.updateUser(user._id, { lastLoginAt: new Date() });
 
-    const accessToken = this._generateAccessToken(user, session._id);
-    const refreshToken = await this._generateRefreshToken(user._id, session._id);
+    const accessToken = this._generateAccessToken(user, session.sessionId);
+    const refreshToken = await this._generateRefreshToken(user._id, session.sessionId);
 
     const userObj = { ...user };
     delete userObj.passwordHash;

@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const ApiKeySchema = new mongoose.Schema({
   userId: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: String,
     ref: 'User',
     required: true
   },

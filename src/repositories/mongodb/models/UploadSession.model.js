@@ -8,7 +8,7 @@ const UploadSessionSchema = new mongoose.Schema({
     unique: true
   },
   userId: {
-    type: mongoose.Schema.Types.ObjectId,
+    type: String,
     ref: 'User',
     required: true
   },

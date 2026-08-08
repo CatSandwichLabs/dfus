@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const UserSchema = new mongoose.Schema({
   _id: {
     type: String,
+    default: () => require('nanoid').nanoid(),
     required: true
   },
   firebaseUid: {
