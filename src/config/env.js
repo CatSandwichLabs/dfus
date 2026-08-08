@@ -70,7 +70,7 @@ const config = {
   
   MASTER: {
     HOST: env.MASTER_HOST || 'localhost',
-    PORT: parsePositiveInt(env.MASTER_PORT, 3000, 1, 65535, 'MASTER_PORT'),
+    PORT: parsePositiveInt(env.MASTER_PORT || env.PORT, 3000, 1, 65535, 'MASTER_PORT'),
   },
   
   WORKER: {
@@ -79,7 +79,7 @@ const config = {
     BASE_PORT: parsePositiveInt(env.WORKER_BASE_PORT, 4001, 1, 65535, 'WORKER_BASE_PORT'),
     SECRET: env.WORKER_SECRET || 'default-worker-secret-key',
     ID: env.WORKER_ID || `worker-${Math.random().toString(36).substring(2, 10)}`,
-    PORT: env.WORKER_PORT ? parsePositiveInt(env.WORKER_PORT, null, 1, 65535, 'WORKER_PORT') : null
+    PORT: parsePositiveInt(env.WORKER_PORT || env.PORT, 4001, 1, 65535, 'WORKER_PORT')
   },
   
   AUTH: {

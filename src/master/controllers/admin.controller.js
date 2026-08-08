@@ -33,17 +33,12 @@ class AdminController {
 
   async getActivityLogs(req, res) {
     const db = getDatabase();
-    // Use Mongoose directly for the admin route, or if a repo method exists, use it.
-    // For this admin panel, we'll fetch recent activities directly via Mongoose if using MongoMetadataRepo
-    if (db.client && db.client.model) {
-      const Activity = db.client.model('Activity');
-      const activities = await Activity.find()
-        .sort({ createdAt: -1 })
-        .limit(100)
-        .lean();
-      return res.json({ activities });
+    try {
+      const activities = await db.getAllActivities(100);
+      return res.json({ activities: activities || [] });
+    } catch (err) {
+      return res.json({ activities: [] });
     }
-    res.json({ activities: [] });
   }
 }
 

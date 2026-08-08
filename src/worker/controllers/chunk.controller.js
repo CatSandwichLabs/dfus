@@ -18,11 +18,11 @@ class ChunkController {
       
       const token = require('jsonwebtoken').sign({ workerId }, config.WORKER.SECRET);
       
-      await fetch(`${config.MASTER.URL}/api/v1/system/workers/chunk-complete`, {
+      await fetch(`${config.WORKER.MASTER_URL}/api/v1/system/workers/chunk-complete`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'x-worker-secret': config.WORKER.SECRET
         },
         body: JSON.stringify({ sessionId, chunkIndex, chunkHash, workerId })
       }).catch(err => {

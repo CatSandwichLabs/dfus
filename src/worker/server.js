@@ -12,6 +12,8 @@ const errorHandler = require('../middleware/errorHandler');
 const heartbeatService = require('./services/heartbeat.service');
 const storageService = require('./services/storage.service');
 
+const { initDatabase } = require('../repositories/database');
+
 const logger = createLogger('worker');
 const app = express();
 
@@ -42,6 +44,7 @@ let server;
 
 async function startServer() {
   try {
+    await initDatabase();
     await storageService.initStorage();
     const PORT = config.WORKER.PORT;
     server = app.listen(PORT, () => {

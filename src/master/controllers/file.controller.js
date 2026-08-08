@@ -9,7 +9,7 @@ class FileController {
   }
 
   async listFiles(req, res) {
-    const { parentId } = req.query;
+    const parentId = req.query.parentId || req.query.folderId || null;
     const files = await fileService.listFiles(req.user.userId, parentId);
     res.json({ files });
   }

@@ -428,6 +428,13 @@ class MongoMetadataRepo extends IMetadataRepository {
     return await activity.save();
   }
 
+  async getAllActivities(limit = 100) {
+    return await Activity.find()
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+  }
+
   // --- Versions ---
   async countVersions(fileId) {
     return await Version.countDocuments({ fileId });

@@ -129,7 +129,7 @@ async function getPopulatedRing(db) {
   const workers = await db.getAllWorkers();
   const aliveWorkerIds = workers
     .filter(w => w.status === 'alive')
-    .map(w => w.id || w._id || w.workerId);
+    .map(w => w.workerId || w.id || w._id);
   return buildRingFromWorkers(aliveWorkerIds);
 }
 
