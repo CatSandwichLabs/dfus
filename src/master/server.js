@@ -33,7 +33,11 @@ const app = express();
 app.set('logger', logger);
 
 // Security and CORS Middleware
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(helmet({ 
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: false,
+  crossOriginOpenerPolicy: false
+}));
 
 const corsOptions = {
   origin: config.CORS.ALLOWED_ORIGINS.includes('*') ? true : config.CORS.ALLOWED_ORIGINS,
