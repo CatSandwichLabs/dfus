@@ -101,15 +101,16 @@ class AuthService {
       user = {
         _id: userId,
         firebaseUid: decodedToken.uid,
-        email: decodedToken.email || null,
         username: decodedToken.email ? decodedToken.email.split('@')[0] : `user_${nanoid(8)}`,
-        phone: decodedToken.phone_number || null,
         role,
         isActive: true,
         storageQuota: config.STORAGE?.DEFAULT_USER_QUOTA || 10737418240,
         createdAt: new Date(),
         updatedAt: new Date()
       };
+      
+      if (decodedToken.email) user.email = decodedToken.email;
+      if (decodedToken.phone_number) user.phone = decodedToken.phone_number;
       
       await this.db.createUser(user);
     }
