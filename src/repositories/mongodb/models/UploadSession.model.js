@@ -25,6 +25,10 @@ const UploadSessionSchema = new mongoose.Schema({
     type: [Boolean], // Array mapping index -> isCompleted
     default: []
   },
+  dedupSavedBytes: {
+    type: Number,
+    default: 0
+  },
   expiresAt: {
     type: Date,
     required: true

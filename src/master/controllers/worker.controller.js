@@ -16,7 +16,22 @@ class WorkerController {
     res.json({ message: 'Registered successfully' });
   }
 
-  // Future heartbeat reporting could go here if pushing instead of pulling
+  async heartbeat(req, res) {
+    const { id, load } = req.body;
+    const db = getDatabase();
+    await db.updateWorkerHeartbeat(id, load);
+    res.json({ message: 'Heartbeat acknowledged' });
+  }
+
+  async chunkComplete(req, res) {
+    const { sessionId, chunkIndex, chunkHash, workerId } = req.body;
+    const db = getDatabase();
+    
+    await db.updateSessionChunkStatus(sessionId, chunkIndex, true);
+    await db.addWorkerToChunk(chunkHash, workerId);
+    
+    res.json({ message: 'Chunk completion recorded' });
+  }
 }
 
 module.exports = new WorkerController();

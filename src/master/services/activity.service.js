@@ -7,8 +7,20 @@ class ActivityService {
   }
 
   async logActivity(userId, action, details) {
-    // In a real implementation we would save to db.activityLogs
-    // For now, we just broadcast via websocket
+    const activityData = {
+      userId,
+      action,
+      resourceType: details.resourceType || 'system',
+      resourceId: details.resourceId || null,
+      metadata: details,
+      ipAddress: details.ip,
+      userAgent: details.userAgent
+    };
+    
+    if (this.db.logActivity) {
+      await this.db.logActivity(activityData);
+    }
+
     const message = {
       type: 'ACTIVITY_LOG',
       data: {

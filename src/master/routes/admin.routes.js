@@ -11,5 +11,6 @@ router.use(adminAuth);
 
 router.get('/health', asyncWrapper(adminController.getSystemHealth.bind(adminController)));
 router.post('/users/:userId/quota', asyncWrapper(adminController.setStorageQuota.bind(adminController)));
+router.get('/activity', asyncWrapper(adminController.getActivityLogs.bind(adminController)));
 
 module.exports = router;

@@ -1,5 +1,5 @@
 const { getDatabase } = require('../../repositories/database');
-const { NotFoundError } = require('../../utils/errors');
+const { NotFoundError, ConflictError } = require('../../utils/errors');
 
 class VersionService {
   constructor() {
@@ -10,31 +10,41 @@ class VersionService {
     const file = await this.db.findFileById(fileId);
     if (!file || file.userId.toString() !== userId) throw new NotFoundError('File not found');
 
-    return file.versions || [];
+    return await this.db.getVersions(fileId);
   }
 
-  async addVersion(userId, fileId, newVersionData) {
+  async restoreVersion(userId, fileId, versionId) {
     const file = await this.db.findFileById(fileId);
     if (!file || file.userId.toString() !== userId) throw new NotFoundError('File not found');
 
-    const newVersion = {
-      version: (file.versions ? file.versions.length : 0) + 1,
-      size: newVersionData.size,
-      chunks: newVersionData.chunks,
-      uploadedAt: new Date()
-    };
+    const version = await this.db.getVersionById(versionId);
+    if (!version || version.fileId.toString() !== fileId.toString()) throw new NotFoundError('Version not found');
 
-    const versions = file.versions || [];
-    versions.push(newVersion);
-
-    await this.db.updateFile(fileId, { 
-      versions,
-      size: newVersionData.size, 
-      chunks: newVersionData.chunks,
-      updatedAt: new Date()
+    // 1. Create a new Version record to store the CURRENT file state
+    const versionsCount = await this.db.countVersions(fileId);
+    const newVersionRecord = await this.db.createVersion({
+      fileId: file._id,
+      versionNumber: versionsCount + 1,
+      size: file.size,
+      merkleRoot: file.merkleRoot || ''
     });
 
-    return newVersion;
+    // 2. Move CURRENT chunks to the new version record
+    await this.db.updateChunksFileId(file._id, newVersionRecord._id);
+
+    // 3. Move the OLD chunks from the version being restored to the CURRENT file
+    await this.db.updateChunksFileId(version._id, file._id);
+
+    // 4. Update the CURRENT file's size and merkleRoot to match the restored version
+    await this.db.updateFile(file._id, {
+      size: version.size,
+      merkleRoot: version.merkleRoot
+    });
+    
+    // 5. Delete the old version record as its chunks are now on the main file
+    await this.db.deleteVersion(version._id);
+
+    return await this.db.findFileById(file._id);
   }
 }
 

@@ -1,4 +1,5 @@
 const fileService = require('../services/file.service');
+const previewService = require('../services/preview.service');
 
 class FileController {
   async getDownloadManifest(req, res) {
@@ -29,6 +30,26 @@ class FileController {
     const { fileId } = req.params;
     const file = await fileService.updateFile(fileId, req.user.userId, req.body);
     res.json(file);
+  }
+
+  async getVersions(req, res) {
+    const { fileId } = req.params;
+    const versionService = require('../services/version.service');
+    const versions = await versionService.getVersions(req.user.userId, fileId);
+    res.json({ versions });
+  }
+
+  async restoreVersion(req, res) {
+    const { fileId, versionId } = req.params;
+    const versionService = require('../services/version.service');
+    const file = await versionService.restoreVersion(req.user.userId, fileId, versionId);
+    res.json(file);
+  }
+
+  async getPreview(req, res) {
+    const { fileId } = req.params;
+    const preview = await previewService.generatePreview(req.user.userId, fileId);
+    res.json(preview);
   }
 }
 

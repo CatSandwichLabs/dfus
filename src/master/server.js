@@ -25,6 +25,7 @@ const shareRoutes = require('./routes/share.routes');
 const workerRoutes = require('./routes/worker.routes');
 const adminRoutes = require('./routes/admin.routes');
 const cronRoutes = require('./routes/cron.routes');
+const cleanupJob = require('./services/cleanup.job');
 
 const logger = createLogger('master');
 const app = express();
@@ -118,6 +119,7 @@ if (require.main === module) {
   (async () => {
     try {
       await initDatabase();
+      cleanupJob.start();
       const PORT = config.MASTER.PORT;
       const server = app.listen(PORT, () => {
         logger.info(`Master node started on port ${PORT} in ${config.MODE} mode`);

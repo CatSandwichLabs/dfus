@@ -39,6 +39,32 @@ class TrashService {
 
     await this.db.deleteTrashItem(trashId);
   }
+
+  async permanentDelete(userId, trashId) {
+    const trashItem = await this.db.getTrashItemById(trashId);
+    if (!trashItem || trashItem.userId.toString() !== userId) throw new NotFoundError('Trash item not found');
+
+    if (trashItem.type === 'file') {
+      const fileId = trashItem.originalId;
+      const file = await this.db.findFileById(fileId);
+      
+      if (file) {
+        const chunks = await this.db.findChunksByFileId(fileId);
+        for (const chunk of chunks) {
+          await this.db.decrementChunkRefCount(chunk.chunkHash);
+        }
+        await this.db.deleteFile(fileId);
+        
+        const user = await this.db.findUserById(userId);
+        const newStorage = Math.max(0, (user.storageUsed || 0) - file.size);
+        await this.db.updateUser(userId, { storageUsed: newStorage });
+      }
+    } else {
+      await this.db.deleteFolder(trashItem.originalId);
+    }
+
+    await this.db.deleteTrashItem(trashId);
+  }
 }
 
 module.exports = new TrashService();

@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom';
-import { Cloud, LogOut, User as UserIcon } from 'lucide-react';
+import { Cloud, LogOut, User as UserIcon, Trash2, Activity } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function Navbar({ token, setToken }) {
@@ -34,9 +34,21 @@ export default function Navbar({ token, setToken }) {
             </>
           ) : (
             <>
+              <Link to="/storage" className="text-sm text-slate-300 hover:text-white transition-colors flex items-center gap-2">
+                <Cloud size={16} />
+                Cluster
+              </Link>
               <Link to="/dashboard" className="text-sm text-slate-300 hover:text-white transition-colors flex items-center gap-2">
                 <UserIcon size={16} />
                 Dashboard
+              </Link>
+              <Link to="/trash" className="text-sm text-slate-300 hover:text-white transition-colors flex items-center gap-2">
+                <Trash2 size={16} />
+                Trash
+              </Link>
+              <Link to="/admin/activity" className="text-sm text-slate-300 hover:text-white transition-colors flex items-center gap-2">
+                <Activity size={16} />
+                Activity
               </Link>
               <button 
                 onClick={handleLogout}

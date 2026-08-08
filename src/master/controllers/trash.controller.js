@@ -17,6 +17,12 @@ class TrashController {
     await trashService.restoreFromTrash(req.user.userId, trashId);
     res.status(204).send();
   }
+
+  async permanentDelete(req, res) {
+    const { trashId } = req.params;
+    await trashService.permanentDelete(req.user.userId, trashId);
+    res.status(204).send();
+  }
 }
 
 module.exports = new TrashController();

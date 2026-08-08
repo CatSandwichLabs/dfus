@@ -11,6 +11,25 @@ class ChunkController {
       
       await storageService.handleUpload(chunkHash, req);
       
+      // Notify Master
+      const fetch = require('node-fetch');
+      const { sessionId, chunkIndex, workerId } = req.chunkContext;
+      const config = require('../../config/env');
+      
+      const token = require('jsonwebtoken').sign({ workerId }, config.WORKER.SECRET);
+      
+      await fetch(`${config.MASTER.URL}/api/v1/system/workers/chunk-complete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ sessionId, chunkIndex, chunkHash, workerId })
+      }).catch(err => {
+        // Just log the error, don't fail the upload
+        console.error('Failed to notify master:', err.message);
+      });
+      
       res.status(201).json({ message: 'Chunk uploaded successfully' });
     } catch (err) {
       next(err);

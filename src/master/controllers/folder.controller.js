@@ -19,9 +19,22 @@ class FolderController {
     res.json(folder);
   }
 
+  async getFolderPath(req, res) {
+    const { folderId } = req.params;
+    const path = await folderService.getFolderPath(req.user.userId, folderId);
+    res.json({ path });
+  }
+
   async updateFolder(req, res) {
     const { folderId } = req.params;
     const folder = await folderService.updateFolder(folderId, req.user.userId, req.body);
+    res.json(folder);
+  }
+
+  async moveFolder(req, res) {
+    const { folderId } = req.params;
+    const { parentId } = req.body;
+    const folder = await folderService.moveFolder(folderId, req.user.userId, parentId);
     res.json(folder);
   }
 

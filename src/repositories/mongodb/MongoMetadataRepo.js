@@ -66,6 +66,10 @@ class MongoMetadataRepo extends IMetadataRepository {
     return await File.findById(fileId).lean();
   }
   
+  async findFileByNameAndFolder(userId, name, folderId = null) {
+    return await File.findOne({ userId, originalName: name, folderId }).lean();
+  }
+  
   async findFilesByUserId(userId, options = {}) {
     const { skip = 0, limit = 20, folderId, status } = options;
     const query = { userId };
@@ -108,6 +112,58 @@ class MongoMetadataRepo extends IMetadataRepository {
     return result[0]?.total || 0;
   }
 
+  async searchFiles(userId, options = {}) {
+    const { text, mimeType, minSize, maxSize, fromDate, toDate, tags, folderId, status, skip = 0, limit = 20 } = options;
+    const query = { userId };
+    
+    if (text) {
+      query.$text = { $search: text };
+    }
+    if (mimeType) query.mimeType = mimeType;
+    if (minSize !== undefined || maxSize !== undefined) {
+      query.size = {};
+      if (minSize !== undefined) query.size.$gte = Number(minSize);
+      if (maxSize !== undefined) query.size.$lte = Number(maxSize);
+    }
+    if (fromDate || toDate) {
+      query.createdAt = {};
+      if (fromDate) query.createdAt.$gte = new Date(fromDate);
+      if (toDate) query.createdAt.$lte = new Date(toDate);
+    }
+    if (tags && tags.length > 0) {
+      query.tags = { $all: tags };
+    }
+    if (folderId !== undefined) {
+      query.folderId = folderId === 'root' ? null : folderId;
+    }
+    if (status) {
+      query.status = status;
+    }
+
+    const mQuery = File.find(query);
+    if (text) {
+      mQuery.sort({ score: { $meta: 'textScore' } });
+    } else {
+      mQuery.sort({ createdAt: -1 });
+    }
+    
+    return await mQuery.skip(Number(skip)).limit(Number(limit)).lean();
+  }
+
+  async getTags(userId) {
+    const result = await File.aggregate([
+      { $match: { userId: userId, tags: { $exists: true, $not: { $size: 0 } } } },
+      { $unwind: "$tags" },
+      { $group: { _id: "$tags", count: { $sum: 1 } } },
+      { $sort: { count: -1 } }
+    ]);
+    return result.map(r => ({ tag: r._id, count: r.count }));
+  }
+
+  async incrementDownloadCount(fileId) {
+    return await File.findByIdAndUpdate(fileId, { $inc: { downloadCount: 1 } }, { new: true }).lean();
+  }
+
   // --- Folders ---
   async createFolder(folderData) {
     const folder = new Folder(folderData);
@@ -118,8 +174,14 @@ class MongoMetadataRepo extends IMetadataRepository {
     return await Folder.findById(folderId).lean();
   }
 
-  async findFoldersByUserId(userId) {
-    return await Folder.find({ userId }).lean();
+  async findFoldersByUserId(userId, parentId = undefined) {
+    const query = { userId };
+    if (parentId !== undefined) query.parentId = parentId;
+    return await Folder.find(query).lean();
+  }
+
+  async findFolderByNameAndParent(userId, name, parentId = null) {
+    return await Folder.findOne({ userId, name, parentId }).lean();
   }
 
   async updateFolder(folderId, updateData) {
@@ -128,6 +190,20 @@ class MongoMetadataRepo extends IMetadataRepository {
 
   async deleteFolder(folderId) {
     return await Folder.findByIdAndDelete(folderId).lean();
+  }
+
+  async searchFolders(userId, options = {}) {
+    const { text, folderId, skip = 0, limit = 20 } = options;
+    const query = { userId };
+    
+    if (text) {
+      query.name = { $regex: text, $options: 'i' };
+    }
+    if (folderId !== undefined) {
+      query.parentId = folderId === 'root' ? null : folderId;
+    }
+    
+    return await Folder.find(query).sort({ createdAt: -1 }).skip(Number(skip)).limit(Number(limit)).lean();
   }
 
   // --- Chunks ---
@@ -142,6 +218,17 @@ class MongoMetadataRepo extends IMetadataRepository {
   
   async findChunkByHash(chunkHash) {
     return await Chunk.findOne({ chunkHash }).lean();
+  }
+  
+  async addWorkerToChunk(chunkHash, workerId) {
+    return await Chunk.findOneAndUpdate(
+      { chunkHash },
+      { 
+        $addToSet: { workerIds: workerId },
+        $set: { status: 'replicated' } 
+      },
+      { new: true }
+    ).lean();
   }
   
   async updateChunkWorkers(chunkId, workerIds) {
@@ -308,10 +395,61 @@ class MongoMetadataRepo extends IMetadataRepository {
     return await UploadSession.findOneAndDelete({ sessionId }).lean();
   }
   
+  // --- Trash ---
+  async moveToTrash(trashData) {
+    const trash = new Trash({
+      originalId: trashData.itemId,
+      userId: trashData.userId,
+      originalParentId: trashData.originalFolderId,
+      name: trashData.name,
+      type: trashData.type,
+      expiresAt: trashData.expiresAt
+    });
+    return await trash.save();
+  }
+  
+  async getTrashItemsByUserId(userId) {
+    return await Trash.find({ userId }).lean();
+  }
+  
+  async getTrashItemById(id) {
+    return await Trash.findById(id).lean();
+  }
+  
+  async deleteTrashItem(id) {
+    return await Trash.findByIdAndDelete(id).lean();
+  }
+
   // --- Activities ---
   async logActivity(activityData) {
     const activity = new Activity(activityData);
     return await activity.save();
+  }
+
+  // --- Versions ---
+  async countVersions(fileId) {
+    return await Version.countDocuments({ fileId });
+  }
+
+  async createVersion(versionData) {
+    const version = new Version(versionData);
+    return await version.save();
+  }
+  
+  async getVersions(fileId) {
+    return await Version.find({ fileId }).sort({ versionNumber: -1 }).lean();
+  }
+  
+  async getVersionById(versionId) {
+    return await Version.findById(versionId).lean();
+  }
+
+  async updateChunksFileId(oldFileId, newFileId) {
+    return await Chunk.updateMany({ fileId: oldFileId }, { $set: { fileId: newFileId } });
+  }
+  
+  async deleteVersion(versionId) {
+    return await Version.findByIdAndDelete(versionId).lean();
   }
 
   // --- Lifecycle ---

@@ -16,9 +16,22 @@ class MasterHeartbeatService {
       throw error;
     }
 
+    const oldStatus = worker.status;
     await db.updateWorkerStatus(workerId, 'alive');
     if (db.updateWorkerLoad) {
       await db.updateWorkerLoad(workerId, loadStats);
+    }
+    
+    if (oldStatus !== 'alive') {
+      try {
+        const realtime = require('./websocket.service');
+        realtime.broadcastAll({
+          event: 'worker:status',
+          data: { workerId, status: 'alive', previousStatus: oldStatus }
+        });
+      } catch (e) {
+        logger.warn(`Could not broadcast worker status: ${e.message}`);
+      }
     }
     
     // In serverless mode, the hash ring is rebuilt per-request from DB,
@@ -48,6 +61,16 @@ class MasterHeartbeatService {
           logger.warn(`Worker ${worker.id} marked as DEAD (last seen ${timeSinceLastSeen}ms ago)`);
           await db.updateWorkerStatus(worker.id, 'dead');
           deadCount++;
+          
+          try {
+            const realtime = require('./websocket.service');
+            realtime.broadcastAll({
+              event: 'worker:status',
+              data: { workerId: worker.id, status: 'dead', previousStatus: worker.status }
+            });
+          } catch (e) {
+            logger.warn(`Could not broadcast worker status: ${e.message}`);
+          }
 
           // Trigger replication asynchronously
           try {

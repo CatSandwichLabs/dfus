@@ -10,5 +10,6 @@ router.use(authenticate);
 router.get('/', asyncWrapper(trashController.listTrash.bind(trashController)));
 router.post('/move', asyncWrapper(trashController.moveToTrash.bind(trashController)));
 router.post('/:trashId/restore', asyncWrapper(trashController.restoreFromTrash.bind(trashController)));
+router.delete('/:trashId', asyncWrapper(trashController.permanentDelete.bind(trashController)));
 
 module.exports = router;

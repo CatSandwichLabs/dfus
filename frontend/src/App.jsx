@@ -4,6 +4,10 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
+import StorageDashboard from './pages/StorageDashboard';
+import SharePage from './pages/SharePage';
+import TrashPage from './pages/TrashPage';
+import AdminActivity from './pages/AdminActivity';
 import Navbar from './components/Navbar';
 
 function App() {
@@ -27,6 +31,10 @@ function App() {
             <Route path="/login" element={!token ? <Login setToken={setToken} /> : <Navigate to="/dashboard" />} />
             <Route path="/register" element={!token ? <Register /> : <Navigate to="/dashboard" />} />
             <Route path="/dashboard" element={token ? <Dashboard token={token} /> : <Navigate to="/login" />} />
+            <Route path="/storage" element={token ? <StorageDashboard token={token} /> : <Navigate to="/login" />} />
+            <Route path="/trash" element={token ? <TrashPage token={token} /> : <Navigate to="/login" />} />
+            <Route path="/admin/activity" element={token ? <AdminActivity token={token} /> : <Navigate to="/login" />} />
+            <Route path="/share/:shareToken" element={<SharePage />} />
           </Routes>
         </main>
       </div>

@@ -28,7 +28,8 @@ const chunkAuth = (action) => {
       req.chunkContext = {
         sessionId: decoded.sessionId,
         chunkHash: decoded.chunkHash,
-        workerId: decoded.workerId
+        workerId: decoded.workerId,
+        chunkIndex: decoded.chunkIndex
       };
       
       next();

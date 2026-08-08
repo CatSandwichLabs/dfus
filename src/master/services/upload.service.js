@@ -97,7 +97,7 @@ class UploadService {
         
         // Short-lived JWT for the chunk
         const token = jwt.sign(
-          { sessionId, chunkHash: hash, workerId },
+          { sessionId, chunkHash: hash, workerId, chunkIndex: i },
           config.WORKER.SECRET,
           { expiresIn: '15m' }
         );
@@ -123,6 +123,7 @@ class UploadService {
       fileId: file._id,
       totalChunks: chunkHashes.length,
       chunkStatus,
+      dedupSavedBytes: dedupSavedBytes,
       expiresAt
     });
 
@@ -165,23 +166,60 @@ class UploadService {
       throw new ConflictError('Not all chunks have been uploaded');
     }
 
-    // Mark file as complete
-    await db.updateFile(session.fileId, {
-      status: 'complete',
-      merkleRoot
-    });
-
-    // Update storage quota for the non-deduped amount?
-    // According to spec: "Deduped chunks don't count toward quota".
-    // We can calculate actual added storage by looking at chunks that didn't previously exist, but
-    // for simplicity and standard quota enforcement, we just add the file size.
-    // Wait, the spec says: "Deduped chunks don't count toward quota... update storage quota".
-    // To do this perfectly, we should calculate the sum of sizes of chunks that were just uploaded.
-    const file = await db.findFileById(session.fileId);
+    const tempFile = await db.findFileById(session.fileId);
     
-    // For now, let's just add the whole file size. The cleanup/refcount mechanism can be used to true up later if needed.
-    // We will just increment user's storage.
-    await db.updateStorageUsed(userId, file.size);
+    // Versioning logic
+    const existingFile = await db.findFileByNameAndFolder(userId, tempFile.originalName, tempFile.folderId);
+    let finalFileId = session.fileId;
+    
+    if (existingFile && existingFile._id.toString() !== session.fileId.toString() && existingFile.status === 'complete') {
+      const versionsCount = await db.countVersions(existingFile._id);
+      const versionRecord = await db.createVersion({
+        fileId: existingFile._id,
+        versionNumber: versionsCount + 1,
+        size: existingFile.size,
+        merkleRoot: existingFile.merkleRoot || ''
+      });
+      
+      // Move old chunks to the version record
+      await db.updateChunksFileId(existingFile._id, versionRecord._id);
+      
+      // Move new chunks to the existing file
+      await db.updateChunksFileId(session.fileId, existingFile._id);
+      
+      // Update existing file
+      await db.updateFile(existingFile._id, {
+        size: tempFile.size,
+        merkleRoot: merkleRoot || undefined
+      });
+      
+      // Delete temp file
+      await db.deleteFile(session.fileId);
+      finalFileId = existingFile._id;
+    } else {
+      // Mark file as complete
+      await db.updateFile(session.fileId, {
+        status: 'complete',
+        merkleRoot: merkleRoot || undefined
+      });
+    }
+
+    try {
+      const realtime = require('./websocket.service');
+      realtime.sendToUser(session.userId, {
+        event: 'upload:complete',
+        data: { fileId: finalFileId, fileName: tempFile.originalName, totalSize: tempFile.size }
+      });
+    } catch (e) {
+      console.warn(`Could not broadcast upload complete: ${e.message}`);
+    }
+
+    // Update storage quota for the non-deduped amount
+    const file = await db.findFileById(finalFileId);
+    
+    // We increment user's storage by file size minus deduped bytes
+    const bytesToIncrement = file.size - (session.dedupSavedBytes || 0);
+    await db.updateStorageUsed(userId, bytesToIncrement);
 
     // Delete session
     await db.deleteSession(sessionId);

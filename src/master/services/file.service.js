@@ -34,11 +34,10 @@ class FileService {
     };
 
     for (const chunk of chunks) {
-      const nodes = hashRing.getNodes(chunk.chunkHash, 2); // Get 2 nodes for failover
-      const targetNode = nodes.length > 0 ? nodes[0] : null;
+      const targetNode = chunk.workerIds && chunk.workerIds.length > 0 ? chunk.workerIds[0] : null;
 
       if (!targetNode) {
-        throw new Error(`No active workers available for chunk ${chunk.chunkHash}`);
+        throw new Error(`No active workers found in DB for chunk ${chunk.chunkHash}`);
       }
 
       const worker = await this.db.findWorkerById(targetNode);

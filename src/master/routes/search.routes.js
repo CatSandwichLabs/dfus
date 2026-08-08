@@ -8,5 +8,6 @@ const router = express.Router();
 router.use(authenticate);
 
 router.get('/', asyncWrapper(searchController.search.bind(searchController)));
+router.get('/tags', asyncWrapper(searchController.getTags.bind(searchController)));
 
 module.exports = router;

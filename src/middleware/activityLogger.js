@@ -12,7 +12,8 @@ module.exports = (actionType) => async (req, res, next) => {
       activityService.logActivity(req.user.userId, actionType, {
         method: req.method,
         url: req.originalUrl,
-        ip: req.ip
+        ip: req.ip,
+        userAgent: req.get('User-Agent')
       });
     }
   };

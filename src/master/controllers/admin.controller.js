@@ -30,6 +30,21 @@ class AdminController {
     await db.updateUser(userId, { storageQuota: quotaBytes });
     res.json({ message: 'Quota updated successfully' });
   }
+
+  async getActivityLogs(req, res) {
+    const db = getDatabase();
+    // Use Mongoose directly for the admin route, or if a repo method exists, use it.
+    // For this admin panel, we'll fetch recent activities directly via Mongoose if using MongoMetadataRepo
+    if (db.client && db.client.model) {
+      const Activity = db.client.model('Activity');
+      const activities = await Activity.find()
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .lean();
+      return res.json({ activities });
+    }
+    res.json({ activities: [] });
+  }
 }
 
 module.exports = new AdminController();

@@ -1,5 +1,7 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
+const { nanoid } = require('nanoid');
+const qrcode = require('qrcode');
 const { getDatabase } = require('../../repositories/database');
 const { NotFoundError, AuthorizationError } = require('../../utils/errors');
 const wss = require('./websocket.service'); // we'll implement this next
@@ -13,7 +15,7 @@ class ShareService {
     const file = await this.db.findFileById(fileId);
     if (!file || file.userId.toString() !== userId) throw new NotFoundError('File not found');
 
-    const shareToken = crypto.randomUUID();
+    const shareToken = nanoid(10);
     const updateObj = {
       isPublic: true,
       shareToken,
@@ -63,6 +65,19 @@ class ShareService {
       if (!isValid) throw new AuthorizationError('Invalid password');
     }
 
+    return file;
+  }
+  async getShareQR(token) {
+    const shareUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/share/${token}`;
+    const qrPng = await qrcode.toBuffer(shareUrl, { type: 'png' });
+    return qrPng;
+  }
+
+  async downloadShare(token, password = null) {
+    const file = await this.accessSharedFile(token, password);
+    if (this.db.incrementDownloadCount) {
+      await this.db.incrementDownloadCount(file._id);
+    }
     return file;
   }
 }

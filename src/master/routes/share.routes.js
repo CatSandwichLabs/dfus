@@ -7,6 +7,8 @@ const router = express.Router();
 
 // Public route to access shared file
 router.post('/access/:shareToken', asyncWrapper(shareController.accessSharedFile.bind(shareController)));
+router.get('/qr/:shareToken', asyncWrapper(shareController.getShareQR.bind(shareController)));
+router.get('/download/:shareToken', asyncWrapper(shareController.downloadShare.bind(shareController)));
 
 // Authenticated routes to manage shares
 router.use(authenticate);

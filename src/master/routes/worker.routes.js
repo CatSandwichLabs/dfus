@@ -6,5 +6,7 @@ const asyncWrapper = require('../../utils/asyncWrapper');
 const router = express.Router();
 
 router.post('/register', workerAuth, asyncWrapper(workerController.registerWorker.bind(workerController)));
+router.post('/heartbeat', workerAuth, asyncWrapper(workerController.heartbeat.bind(workerController)));
+router.post('/chunk-complete', workerAuth, asyncWrapper(workerController.chunkComplete.bind(workerController)));
 
 module.exports = router;
