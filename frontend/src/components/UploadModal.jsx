@@ -116,7 +116,7 @@ export default function UploadModal({ isOpen, onClose, token, currentFolderId, o
       });
       
       const initData = await initRes.json();
-      if (!initRes.ok) throw new Error(initData.error || 'Failed to initialize upload');
+      if (!initRes.ok) throw new Error(initData.error?.message || initData.message || JSON.stringify(initData.error) || 'Failed to initialize upload');
       
       const { sessionId, assignments, dedupedChunks } = initData;
       

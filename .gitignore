@@ -3,3 +3,8 @@ node_modules/
 .DS_Store
 tmp/
 data/
+
+exchange.js
+get_url.js
+token.json
+url.txt

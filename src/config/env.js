@@ -94,7 +94,7 @@ const config = {
   JWT: {
     ACCESS_SECRET: env.JWT_ACCESS_SECRET || 'dfus-default-jwt-access-secret-change-in-production-key-32ch',
     REFRESH_SECRET: env.JWT_REFRESH_SECRET || 'dfus-default-jwt-refresh-secret-change-in-production-key-32ch',
-    ACCESS_EXPIRES_IN: env.JWT_ACCESS_EXPIRES_IN || '15m',
+    ACCESS_EXPIRES_IN: env.JWT_ACCESS_EXPIRES_IN || '7d',
     REFRESH_EXPIRES_IN: env.JWT_REFRESH_EXPIRES_IN || '7d'
   },
   
