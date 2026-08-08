@@ -36,7 +36,7 @@ app.set('logger', logger);
 app.use(helmet({ contentSecurityPolicy: false }));
 
 const corsOptions = {
-  origin: config.CORS.ALLOWED_ORIGINS.includes('*') ? '*' : config.CORS.ALLOWED_ORIGINS,
+  origin: config.CORS.ALLOWED_ORIGINS.includes('*') ? true : config.CORS.ALLOWED_ORIGINS,
   credentials: true,
   exposedHeaders: ['Content-Disposition', 'Content-Length', 'Content-Type']
 };
