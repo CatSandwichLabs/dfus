@@ -1,13 +1,55 @@
 services:
   - type: web
-    name: dfus-backend
+    name: dfus-master
     env: node
     buildCommand: npm install
-    startCommand: npm start
+    startCommand: npm run start:master
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
+      - key: MODE
+        value: cloud
+      - key: MASTER_PORT
         value: 10000
-      - key: MONGO_URI
+      # Sync these from Render Dashboard:
+      - key: MONGODB_URI
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: JWT_ACCESS_SECRET
+        sync: false
+      - key: JWT_REFRESH_SECRET
+        sync: false
+      - key: WORKER_SECRET
+        sync: false
+
+  - type: worker
+    name: dfus-storage-node-1
+    env: node
+    buildCommand: npm install
+    startCommand: npm run start:worker
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MODE
+        value: cloud
+      - key: MASTER_HOST
+        value: dfus-master # Render uses service names for internal networking
+      - key: MASTER_PORT
+        value: 10000
+      - key: WORKER_PORT
+        value: 4001
+      # Google Drive Config:
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REFRESH_TOKEN
+        sync: false
+      - key: GOOGLE_DRIVE_FOLDER_ID
+        sync: false
+      # Sync these from Render Dashboard:
+      - key: MONGODB_URI
+        sync: false
+      - key: WORKER_SECRET
         sync: false

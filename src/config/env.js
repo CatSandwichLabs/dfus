@@ -12,7 +12,7 @@ if (env.NODE_ENV !== 'test') {
   }
   required.push('JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET');
   if (env.MODE === 'cloud') {
-    required.push('MONGODB_URI', 'R2_ACCOUNT_ID', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET_NAME');
+    required.push('MONGODB_URI', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REFRESH_TOKEN', 'GOOGLE_DRIVE_FOLDER_ID');
   }
 }
 
@@ -135,11 +135,11 @@ const config = {
     URI: env.MONGODB_URI
   },
   
-  R2: {
-    ACCOUNT_ID: env.R2_ACCOUNT_ID,
-    ACCESS_KEY_ID: env.R2_ACCESS_KEY_ID,
-    SECRET_ACCESS_KEY: env.R2_SECRET_ACCESS_KEY,
-    BUCKET_NAME: env.R2_BUCKET_NAME
+  GOOGLE: {
+    CLIENT_ID: env.GOOGLE_CLIENT_ID,
+    CLIENT_SECRET: env.GOOGLE_CLIENT_SECRET,
+    REFRESH_TOKEN: env.GOOGLE_REFRESH_TOKEN,
+    DRIVE_FOLDER_ID: env.GOOGLE_DRIVE_FOLDER_ID
   },
   
   RATE_LIMIT: {
@@ -163,7 +163,7 @@ Object.freeze(config.STORAGE);
 Object.freeze(config.SYSTEM);
 Object.freeze(config.SQLITE);
 Object.freeze(config.MONGO);
-Object.freeze(config.R2);
+Object.freeze(config.GOOGLE);
 Object.freeze(config.RATE_LIMIT);
 
 module.exports = config;
