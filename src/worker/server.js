@@ -9,7 +9,7 @@ promClient.collectDefaultMetrics();
 const config = require('../config/env');
 const chunkRoutes = require('./routes/chunk.routes');
 const errorHandler = require('../middleware/errorHandler');
-const { startHeartbeat } = require('./services/heartbeat.service');
+const heartbeatService = require('./services/heartbeat.service');
 const storageService = require('./services/storage.service');
 
 const logger = createLogger('worker');
@@ -46,7 +46,7 @@ async function startServer() {
     const PORT = config.WORKER.PORT;
     server = app.listen(PORT, () => {
       logger.info(`Worker node ${config.WORKER.ID} started on port ${PORT}`);
-      startHeartbeat();
+      heartbeatService.startHeartbeat();
     });
   } catch (err) {
     logger.error('Failed to start worker:', err);
