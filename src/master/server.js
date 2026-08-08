@@ -35,8 +35,8 @@ app.set('logger', logger);
 // Security and CORS Middleware
 app.use(helmet({ 
   contentSecurityPolicy: false,
-  crossOriginResourcePolicy: false,
-  crossOriginOpenerPolicy: false
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginOpenerPolicy: { policy: "unsafe-none" }
 }));
 
 const corsOptions = {
