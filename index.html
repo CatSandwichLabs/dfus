@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nexus | Distributed File Storage System</title>
+    
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- QR Code Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Ambient Background -->
+    <div class="ambient-mesh"></div>
+
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar glass-panel">
+            <div class="brand">
+                <i data-lucide="layers" class="brand-icon"></i>
+                <div class="brand-text">
+                    <h1>NEXUS</h1>
+                    <span>Distributed DFS</span>
+                </div>
+            </div>
+
+            <nav class="nav-menu">
+                <button class="nav-item active" data-target="dashboard">
+                    <i data-lucide="activity"></i>
+                    Topology & Health
+                </button>
+                <button class="nav-item" data-target="explorer">
+                    <i data-lucide="folder-tree"></i>
+                    File Explorer
+                </button>
+            </nav>
+
+            <div class="evaluator-demo-box glass-panel">
+                <div class="demo-header">
+                    <i data-lucide="flask-conical" class="text-accent"></i>
+                    <h3>Evaluator Demo Bar</h3>
+                </div>
+                <div class="demo-actions">
+                    <button id="btn-kill-node" class="btn btn-danger">
+                        <i data-lucide="skull"></i> Simulate W-02 Crash
+                    </button>
+                    <button id="btn-revive-node" class="btn btn-success" disabled>
+                        <i data-lucide="heart-pulse"></i> Revive W-02
+                    </button>
+                </div>
+                <div class="demo-log" id="demo-log">
+                    <div class="log-line">System initialized. Awaiting commands...</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Top Dashboard -->
+            <header class="top-dashboard glass-panel">
+                <div class="stat-card">
+                    <div class="stat-info">
+                        <span class="stat-label">Total Storage</span>
+                        <span class="stat-value">12.4 TB</span>
+                    </div>
+                    <div class="donut-chart-mini">
+                        <svg viewBox="0 0 36 36">
+                            <path class="circle-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                            <path class="circle-used" stroke-dasharray="60, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                        </svg>
+                        <span class="donut-label">60%</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-info">
+                        <span class="stat-label">Dedup Savings</span>
+                        <span class="stat-value text-accent">4.2 TB</span>
+                        <span class="stat-sub">⚡ 100% Match Hit Rate</span>
+                    </div>
+                    <i data-lucide="zap" class="stat-icon text-accent"></i>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-info">
+                        <span class="stat-label">Network I/O</span>
+                        <div class="sparkline-container" id="network-sparkline">
+                            <!-- JS generated bars -->
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Views -->
+            <div class="view-container">
+                
+                <!-- Topology View -->
+                <section id="view-dashboard" class="view active">
+                    <div class="section-header">
+                        <h2>Distributed Topology & Health Radar</h2>
+                        <div class="master-node badge-master">
+                            <i data-lucide="cpu"></i> MASTER NODE (Brain) <span class="pulse-dot green"></span>
+                        </div>
+                    </div>
+                    
+                    <!-- Chunk Flow Animation Canvas -->
+                    <div id="replication-canvas-container">
+                        <canvas id="replication-canvas"></canvas>
+                    </div>
+
+                    <div class="worker-grid" id="worker-grid">
+                        <!-- Workers populated by JS -->
+                    </div>
+                </section>
+
+                <!-- Explorer View -->
+                <section id="view-explorer" class="view">
+                    <div class="explorer-layout">
+                        <!-- Upload Engine -->
+                        <div class="upload-panel glass-panel">
+                            <h3>Direct-to-Worker Upload</h3>
+                            <div class="drop-zone" id="drop-zone">
+                                <i data-lucide="upload-cloud" class="drop-icon"></i>
+                                <p>Drag & drop or <span class="text-accent">browse</span> to upload</p>
+                                <span class="drop-sub">Parallel chunk streaming to workers</span>
+                            </div>
+                            
+                            <div id="upload-simulator" class="upload-simulator hidden">
+                                <div class="file-info-header">
+                                    <span class="filename" id="upload-filename">ubuntu-24.04-desktop.iso</span>
+                                    <span class="filesize">4.8 GB</span>
+                                </div>
+                                
+                                <div class="dedup-flash hidden" id="dedup-flash">
+                                    ⚡ 100% DEDUP HIT — Stored as 0-byte reference
+                                </div>
+
+                                <div class="chunking-viz" id="chunking-viz">
+                                    <div class="chunking-label">Adaptive Chunker (5MB Slices) generating Merkle Tree...</div>
+                                    <div class="chunk-stream-container">
+                                        <div class="stream-track">
+                                            <div class="stream-label">Worker-01 (w1)</div>
+                                            <div class="stream-progress"><div class="progress-bar w1-bg" id="prog-w1"></div></div>
+                                        </div>
+                                        <div class="stream-track">
+                                            <div class="stream-label">Worker-02 (w2)</div>
+                                            <div class="stream-progress"><div class="progress-bar w2-bg" id="prog-w2"></div></div>
+                                        </div>
+                                        <div class="stream-track">
+                                            <div class="stream-label">Worker-03 (w3)</div>
+                                            <div class="stream-progress"><div class="progress-bar w3-bg" id="prog-w3"></div></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- File List -->
+                        <div class="file-list-panel glass-panel">
+                            <div class="panel-header">
+                                <h3>File Explorer</h3>
+                                <div class="search-bar">
+                                    <i data-lucide="search"></i>
+                                    <input type="text" placeholder="Search files, hashes...">
+                                </div>
+                            </div>
+                            
+                            <div class="file-list" id="file-list">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <!-- Share Modal -->
+    <div class="modal-overlay hidden" id="share-modal">
+        <div class="modal glass-panel">
+            <button class="modal-close" id="close-share"><i data-lucide="x"></i></button>
+            <div class="modal-header">
+                <h2>Share File</h2>
+                <span class="text-accent" id="share-filename">kernel.tar.gz</span>
+            </div>
+            
+            <div class="modal-content">
+                <div class="qr-section">
+                    <div class="qr-code-wrapper" id="qrcode"></div>
+                    <p class="qr-hint">Scan with mobile to download</p>
+                </div>
+                <div class="share-settings">
+                    <div class="setting-row">
+                        <label>Expiration</label>
+                        <select class="glass-input">
+                            <option>1 Hour</option>
+                            <option>24 Hours</option>
+                            <option>7 Days</option>
+                            <option>Permanent</option>
+                        </select>
+                    </div>
+                    <div class="setting-row">
+                        <label>Password Protect</label>
+                        <input type="password" class="glass-input" placeholder="Enter password (optional)">
+                    </div>
+                    <div class="link-box">
+                        <input type="text" readonly id="share-link" value="https://nexus.dfs/s/x9f2aK" class="glass-input">
+                        <button class="btn btn-primary" id="btn-copy">
+                            <i data-lucide="copy"></i> Copy
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
